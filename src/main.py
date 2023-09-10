@@ -1,11 +1,13 @@
 from __future__ import annotations
 from collections import namedtuple
-from typing import Dict, List, Set, Generator
+from typing import Dict, List, Set, Generator, Callable
 from uuid import uuid4, UUID
 from tabulate import tabulate
 from enum import Enum
 from random import randint
 from queue import Queue
+from functools import reduce
+import operator
 import math
 
 NAT20 = math.inf
@@ -13,6 +15,7 @@ NAT1 = -math.inf
 
 
 class DieType(Enum):
+    dummy = 0
     d4 = 4
     d6 = 6
     d8 = 8
@@ -22,20 +25,95 @@ class DieType(Enum):
     d100 = 100
 
 
+DieRollBonus = namedtuple("DieRollBonus", ["source_description", "amount"])
+DieRollMultiplier = namedtuple("DieRollBonus", ["source_description", "multiplier"])
+
+
 class Die:
+    class Roll:
+        def __init__(self, die: Die, bonuses: Set[DieRollBonus] | None = None):
+            self.__die_rolled: Die = die
+            self.__natural_roll: int = die.simple_roll()
+            self.__bonuses: Set[DieRollBonus] = bonuses or set()
+            self.__multipliers: Set[DieRollMultiplier] = set()
+            self.__difficulty_class: int | None = None
+            self.tag: str | None = None
+
+        def add_bonus(self, bonus: DieRollBonus) -> None:
+            self.__bonuses.add(bonus)
+
+        def add_multiplier(self, multiplier: DieRollMultiplier) -> None:
+            self.__multipliers.add(multiplier)
+
+        def set_dc(self, dc: int) -> None:
+            assert self.is_stress_die, "DC only has meaning for stress dice."
+            self.__difficulty_class = dc
+
+        def __get_final_multiplier(self):
+            return reduce(operator.mul, {mul.multiplier for mul in self.__multipliers} | {1})
+
+        @property
+        def is_stress_die(self) -> bool:
+            return self.__die_rolled.type == DieType.d20
+
+        @property
+        def result(self) -> int | float:
+            if self.is_critical_success:
+                return NAT20
+            elif self.is_critical_failure:
+                return NAT1
+            else:
+                unmultiplied_result = self.__natural_roll + sum(bonus.amount for bonus in self.__bonuses)
+                return self.__get_final_multiplier() * unmultiplied_result
+
+        @property
+        def bonuses(self) -> Set[DieRollBonus]:
+            return self.__bonuses
+
+        @property
+        def is_success(self) -> bool:
+            assert self.__difficulty_class, "No DC was set."
+            return self.result >= self.__difficulty_class
+
+        @property
+        def is_critical_success(self) -> bool:
+            return self.is_stress_die and self.__natural_roll == 20
+
+        @property
+        def is_critical_failure(self) -> bool:
+            return self.is_stress_die and self.__natural_roll == 1
+
+        def __repr__(self):
+            bonus_sum = sum(bonus.amount for bonus in self.__bonuses)
+            final_multiplier = self.__get_final_multiplier()
+            basic_repr = f"{self.__die_rolled}+{bonus_sum}"
+            return basic_repr if final_multiplier == 1 else f"{final_multiplier}x({basic_repr})"
+
+    class ConstantRoll(Roll):
+        def __init__(self, value: int):
+            super().__init__(Die(0, DieType.dummy))
+            self.__const_value = value
+
+        @property
+        def result(self):
+            return self.__const_value
+
+        def __repr__(self):
+            return str(self.__const_value)
+
     def __init__(self, amount: int, die_type: DieType):
         self.__amount = amount
         self.__type = die_type
 
-    def roll(self) -> int:
+    def simple_roll(self) -> int:
         return sum(randint(1, self.__type.value) for _ in range(self.__amount))
 
-    @staticmethod
-    def stress_d20() -> int | float:
-        natural_roll = Die(1, DieType.d20).roll()
-        if natural_roll in {1, 20}:
-            return NAT20 if natural_roll == 20 else NAT1
-        return natural_roll
+    @property
+    def type(self):
+        return self.__type
+
+    def __repr__(self):
+        return f"{self.__amount}{self.__type.name}"
 
 
 class DamageType(Enum):
@@ -79,10 +157,10 @@ Bonus = namedtuple("Bonus", ["amount", "source"])
 class Weapon:
     def __init__(self, name: str, damage_die: Die):
         self.__name: str = name
-        self.__damage_die = damage_die
+        self.__damage_die: Die = damage_die
 
-    def roll_damage(self) -> int:
-        return self.__damage_die.roll()
+    def roll_damage(self) -> Die.Roll:
+        return Die.Roll(self.__damage_die)
 
 
 class Creature(MapItem):
@@ -137,16 +215,22 @@ class Creature(MapItem):
         return 10
 
     def roll_initiative(self) -> int:
-        return Die(1, DieType.d20).roll() + self.get_modifier("dex")
+        return Die(1, DieType.d20).simple_roll() + self.get_modifier("dex")
 
-    def roll_melee_damage(self) -> int:
+    def roll_melee_damage(self) -> Die.Roll:
         if self.__main_weapon:
-            return self.__main_weapon.roll_damage() + self.get_modifier("str") + self.proficiency_bonus
+            base_damage_roll = self.__main_weapon.roll_damage()
+            base_damage_roll.add_bonus(DieRollBonus("str", self.get_modifier("str")))
+            base_damage_roll.add_bonus(DieRollBonus("proficiency", self.proficiency_bonus))
+            return base_damage_roll
         else:
-            return 1  # unarmed attack
+            return Die.ConstantRoll(1)
 
-    def roll_melee_hit(self) -> int | float:
-        return Die.stress_d20() + self.get_modifier("str") + self.proficiency_bonus
+    def roll_melee_hit(self) -> Die.Roll:
+        return Die.Roll(Die(1, DieType.d20), bonuses={
+            DieRollBonus("str", self.get_modifier("str")),
+            DieRollBonus("proficiency", self.proficiency_bonus)
+        })
 
     def equip_weapon(self, weapon: Weapon):
         self.__main_weapon = weapon
@@ -154,14 +238,16 @@ class Creature(MapItem):
     def __repr__(self):
         return self._name
 
-    def get_available_actions(self):
-        raise NotImplementedError()
+    def get_available_actions(self, grid: Map) -> Set[Action]:
+        return {
+            MeleeAttack(self, target) for target in grid.get_adjacent_creatures(grid.find(self))
+        }
 
-    def get_available_bonus_actions(self):
-        raise NotImplementedError()
+    def get_available_bonus_actions(self, grid: Map) -> Set[Action]:
+        return set()
 
-    def get_available_reactions(self):
-        raise NotImplementedError()
+    def get_available_reactions(self, grid: Map) -> Set[Action]:
+        return set()
 
 
 Location = namedtuple("Location", ["x", "y"])
@@ -189,24 +275,127 @@ class Map:
     def find(self, item) -> Location:
         return self.__items_index.get(item.uuid)
 
+    def get_adjacent_creatures(self, loc: Location) -> Set[Creature]:
+        all_adjacent_indices = {
+                Location(loc.x + 1, loc.y),
+                Location(loc.x + 1, loc.y + 1),
+                Location(loc.x, loc.y + 1),
+                Location(loc.x - 1, loc.y + 1),
+                Location(loc.x - 1, loc.y),
+                Location(loc.x - 1, loc.y - 1),
+                Location(loc.x, loc.y - 1),
+                Location(loc.x + 1, loc.y - 1)
+            }
+
+        if loc.x == 0:
+            indices_left = {
+                Location(loc.x - 1, loc.y),
+                Location(loc.x - 1, loc.y + 1),
+                Location(loc.x - 1, loc.y - 1)
+            }
+            all_adjacent_indices = all_adjacent_indices - indices_left
+
+        if loc.x == len(self.__cells)-1:
+            indices_right = {
+                Location(loc.x + 1, loc.y),
+                Location(loc.x + 1, loc.y + 1),
+                Location(loc.x + 1, loc.y - 1)
+            }
+            all_adjacent_indices = all_adjacent_indices - indices_right
+
+        if loc.y == 0:
+            indices_above = {
+                Location(loc.x - 1, loc.y - 1),
+                Location(loc.x + 1, loc.y - 1),
+                Location(loc.x, loc.y - 1),
+            }
+            all_adjacent_indices = all_adjacent_indices - indices_above
+
+        if loc.y == len(self.__cells[0])-1:
+            indices_below = {
+                Location(loc.x - 1, loc.y + 1),
+                Location(loc.x + 1, loc.y + 1),
+                Location(loc.x, loc.y + 1),
+            }
+            all_adjacent_indices = all_adjacent_indices - indices_below
+
+        return {
+            self.__cells[adjacent_loc.y][adjacent_loc.x] for adjacent_loc in all_adjacent_indices
+            if self.__cells[adjacent_loc.y][adjacent_loc.x] is not None
+        }
+
     def __repr__(self):
         return tabulate(self.__cells, tablefmt='grid')
+
+
+class Action:
+    def __init__(self):
+        self.__dice_rolled = list()
+
+    def _log_die_roll(self, roll: Die.Roll):
+        self.__dice_rolled.append(roll)
+
+    def execute(self) -> None:
+        pass
+
+    def describe(self) -> List[str]:
+        rolls_descriptions: List[str] = list()
+        for roll in self.__dice_rolled:
+            roll_result = f"{roll.tag}: rolled {roll} for {roll.result}."
+            if roll.is_stress_die:
+                success_description = "Critical " if (roll.is_critical_success or roll.is_critical_failure) else ""
+                success_description += "Success!" if roll.is_success else "Failure..."
+                rolls_descriptions.append(f"{roll_result} {success_description}")
+            else:
+                rolls_descriptions.append(roll_result)
+
+        return rolls_descriptions
+
+
+class MeleeAttack(Action):
+    def __init__(self, attacker: Creature, target: Creature):
+        super().__init__()
+        self.__attacker: Creature = attacker
+        self.__target: Creature = target
+        self.__hit_roll: Die.Roll | None = None
+        self.__damage_roll: Die.Roll | None = None
+
+    def execute(self) -> None:
+        self.__hit_roll: Die.Roll = self.__attacker.roll_melee_hit()
+        self.__hit_roll.set_dc(self.__target.armor_class)
+        self.__hit_roll.tag = f"{self.__attacker}'s hit on {self.__target}"
+        self._log_die_roll(self.__hit_roll)
+
+        if self.__hit_roll.is_success:
+            damage_roll: Die.Roll = self.__attacker.roll_melee_damage()
+            if self.__hit_roll.is_critical_success:
+                damage_roll.add_multiplier(DieRollMultiplier("critical hit", 2))
+            self._log_die_roll(self.__damage_roll)
+            self.__target.damage(damage_roll.result, DamageType.bludgeoning)
+
+    def __repr__(self):
+        return f"Melee on {self.__target}"
 
 
 class Turn:
     def __init__(self, grid: Map, player: Creature):
         assert grid.find(player)
-        self.__player = player
-        self.__grid = grid
-        self.__available_actions = self.__player.get_available_actions()
-        self.__available_bonus_actions = self.__player.get_available_bonus_actions()
-        self.__available_reactions = self.__player.get_available_reactions()
-        self.__used_action, self.__used_bonus_action, self.__used_reaction = False, False, False
+        self.__player: Creature = player
+        self.__grid: Map = grid
+        self.__available_actions = self.__player.get_available_actions(grid)
+        self.__available_bonus_actions = self.__player.get_available_bonus_actions(grid)
+        self.__available_reactions = self.__player.get_available_reactions(grid)
+        self.__used_action, self.__used_bonus_action = False, False
 
     @property
     def player(self):
         return self.__player
 
+    def get_all_available_moves(self) -> Set[Action]:
+        return self.__available_actions | self.__available_bonus_actions
+
+    def take_bonus_action(self, action: Action) -> None:
+        raise NotImplementedError()
 
 
 class Encounter:
@@ -230,43 +419,38 @@ class Encounter:
         yield Turn(self.__grid, self.__active)
         self.__initiative_queue.put(self.__active)
 
+    def add_player(self, player: Creature, location: Location):
+        self.__players.add(player)
+        self.__grid.place(player, location)
+
+    def add_npc(self, npc: Creature, location: Location):
+        self.__players.add(npc)
+        self.__grid.place(npc, location)
+
     def initialize(self):
         self.__determine_initiative()
         # TODO determine surprise
 
+    def __repr__(self):
+        return self.__grid.__repr__()
 
 
 def main() -> None:
-    grid = Map(3, 3)
+    encounter: Encounter = Encounter()
     player = Creature.Builder().name("Player").level(3).build()
     player.equip_weapon(Weapon("Sword", Die(1, DieType.d8)))
-    enemy = Creature.Builder().name("Enemy").level(3).build()
-    grid.place(player, Location(0, 0))
-    grid.place(enemy, Location(1, 0))
-    print(grid)
-    while True:
-        user_input = input(f"Command: ").lower()
-        if user_input == "exit":
-            break
-        elif user_input == "move":
-            x = int(input("to where? x: "))
-            y = int(input("to where? y: "))
-            grid.move(grid.find(player), Location(x, y))
-            print(grid)
-        elif user_input == "melee":
-            # TODO choose enemy
-            hit_roll = player.roll_melee_hit()
-            damage_roll = player.roll_melee_damage()
-            if hit_roll == NAT20:
-                damage_roll *= 2
-
-            print(f"{player} rolled {hit_roll} to hit over the enemy's AC of {enemy.armor_class}")
-            if hit_roll >= enemy.armor_class:
-                print("Critical Hit!" if hit_roll == NAT20 else "Hit!")
-                enemy.damage(damage_roll, DamageType.bludgeoning)
-                print(f"{enemy} has taken {damage_roll} damage and stands at {enemy.current_hp} HP.")
-            else:
-                print("Critical Miss!" if hit_roll == NAT1 else "Miss!")
+    enemy = Creature.Builder().name("Enemy1").level(3).build()
+    enemy2 = Creature.Builder().name("Enemy2").level(2).build()
+    encounter.add_player(player, Location(1, 1))
+    encounter.add_npc(enemy, Location(1, 0))
+    encounter.add_npc(enemy2, Location(2, 0))
+    print(encounter)
+    encounter.initialize()
+    for turn in encounter.turns():
+        available_moves = turn.get_all_available_moves()
+        print(f"available moves for {turn.player}: ")
+        print(available_moves)
+        input("Choose move: ")
 
 
 if __name__ == "__main__":
