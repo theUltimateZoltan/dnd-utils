@@ -236,7 +236,7 @@ class Creature(MapItem):
         self.__main_weapon = weapon
 
     def __repr__(self):
-        return self._name
+        return f"{self._name} ({self.current_hp})"
 
     def get_available_actions(self, grid: Map) -> Set[Action]:
         return {
@@ -367,11 +367,11 @@ class MeleeAttack(Action):
         self._log_die_roll(self.__hit_roll)
 
         if self.__hit_roll.is_success:
-            damage_roll: Die.Roll = self.__attacker.roll_melee_damage()
+            self.__damage_roll: Die.Roll = self.__attacker.roll_melee_damage()
             if self.__hit_roll.is_critical_success:
-                damage_roll.add_multiplier(DieRollMultiplier("critical hit", 2))
+                self.__damage_roll.add_multiplier(DieRollMultiplier("critical hit", 2))
             self._log_die_roll(self.__damage_roll)
-            self.__target.damage(damage_roll.result, DamageType.bludgeoning)
+            self.__target.damage(self.__damage_roll.result, DamageType.bludgeoning)
 
     def __repr__(self):
         return f"Melee on {self.__target}"
@@ -413,11 +413,10 @@ class Encounter:
             self.__initiative_queue.put(c)
 
     def turns(self) -> Generator[Turn]:
-        if self.__initiative_queue.empty():
-            raise StopIteration()
-        self.__active = self.__initiative_queue.get()
-        yield Turn(self.__grid, self.__active)
-        self.__initiative_queue.put(self.__active)
+        while not self.__initiative_queue.empty():
+            self.__active = self.__initiative_queue.get()
+            yield Turn(self.__grid, self.__active)
+            self.__initiative_queue.put(self.__active)
 
     def add_player(self, player: Creature, location: Location):
         self.__players.add(player)
@@ -444,13 +443,17 @@ def main() -> None:
     encounter.add_player(player, Location(1, 1))
     encounter.add_npc(enemy, Location(1, 0))
     encounter.add_npc(enemy2, Location(2, 0))
-    print(encounter)
     encounter.initialize()
     for turn in encounter.turns():
+        print(encounter)
         available_moves = turn.get_all_available_moves()
         print(f"available moves for {turn.player}: ")
         print(available_moves)
-        input("Choose move: ")
+        choice = input("Choose move: ")
+        for move in available_moves:
+            if repr(move) == choice:
+                move.execute()
+                print(move.describe())
 
 
 if __name__ == "__main__":
