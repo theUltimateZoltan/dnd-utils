@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Set
+from typing import Set, List
 from random import randint
 from functools import reduce
 import operator
@@ -23,17 +23,22 @@ class DieType(Enum):
     d100 = 100
 
 
+class AdvantageSource(Enum):
+    terrain = "terrain"
+    stealth = "stealth"
+
+
 DieRollBonus = namedtuple("DieRollBonus", ["source_description", "amount"])
 DieRollMultiplier = namedtuple("DieRollBonus", ["source_description", "multiplier"])
 
 
 class RollResult:
-    def __init__(self, die: Die, bonuses: Set[DieRollBonus] | None = None):
-        self.__die_rolled: Die = die
-        self.__natural_roll: int = die.simple_roll()
-        self.__bonuses: Set[DieRollBonus] = bonuses or set()
+    def __init__(self, die: Die):
+        self._die_rolled: Die = die
+        self._natural_roll: List[int] = die.roll()
+        self._secondary_natural_roll: List[int] = die.roll()
+        self.__bonuses: Set[DieRollBonus] = set()
         self.__multipliers: Set[DieRollMultiplier] = set()
-        self.__difficulty_class: int | None = None
         self.tag: str | None = None
 
     def add_bonus(self, bonus: DieRollBonus) -> None:
@@ -42,30 +47,48 @@ class RollResult:
     def add_multiplier(self, multiplier: DieRollMultiplier) -> None:
         self.__multipliers.add(multiplier)
 
-    def set_dc(self, dc: int) -> None:
-        assert self.is_stress_die, "DC only has meaning for stress dice."
-        self.__difficulty_class = dc
-
     def __get_final_multiplier(self):
         return reduce(operator.mul, {mul.multiplier for mul in self.__multipliers} | {1})
 
     @property
-    def is_stress_die(self) -> bool:
-        return self.__die_rolled.type == DieType.d20
-
-    @property
     def result(self) -> int | float:
-        if self.is_critical_success:
-            return NAT20
-        elif self.is_critical_failure:
-            return NAT1
-        else:
-            unmultiplied_result = self.__natural_roll + sum(bonus.amount for bonus in self.__bonuses)
-            return self.__get_final_multiplier() * unmultiplied_result
+        unmultiplied_result = sum(self._natural_roll) + sum(bonus.amount for bonus in self.__bonuses)
+        return self.__get_final_multiplier() * unmultiplied_result
 
     @property
     def bonuses(self) -> Set[DieRollBonus]:
         return self.__bonuses
+
+    def __repr__(self):
+        bonus_sum = sum(bonus.amount for bonus in self.__bonuses)
+        final_multiplier = self.__get_final_multiplier()
+        basic_repr = f"{self._die_rolled}+{bonus_sum}"
+        return basic_repr if final_multiplier == 1 else f"{final_multiplier}x({basic_repr})"
+
+
+class StressDieRollResult(RollResult):
+    def __init__(self):
+        super().__init__(Die(1, DieType.d20))
+        self.__difficulty_class: int | None = None
+        self.__advantages: Set[AdvantageSource] = set()
+        self.__disadvantages: Set[AdvantageSource] = set()
+
+    def add_advantage(self, source: AdvantageSource) -> None:
+        self.__advantages.add(source)
+
+    def add_disadvantage(self, source: AdvantageSource) -> None:
+        self.__disadvantages.add(source)
+
+    @property
+    def has_advantage(self):
+        return len(self.__advantages) > len(self.__disadvantages)
+
+    @property
+    def has_disadvantage(self):
+        return len(self.__advantages) < len(self.__disadvantages)
+
+    def set_dc(self, dc: int) -> None:
+        self.__difficulty_class = dc
 
     @property
     def is_success(self) -> bool:
@@ -74,17 +97,30 @@ class RollResult:
 
     @property
     def is_critical_success(self) -> bool:
-        return self.is_stress_die and self.__natural_roll == 20
+        if self.has_advantage:
+            return max(self._natural_roll[0], self._secondary_natural_roll[0]) == 20
+        elif self.has_disadvantage:
+            return self._natural_roll[0] == 20 and self._secondary_natural_roll[0] == 20
+        else:
+            return self._natural_roll[0] == 20
 
     @property
     def is_critical_failure(self) -> bool:
-        return self.is_stress_die and self.__natural_roll == 1
+        if self.has_disadvantage:
+            return min(self._natural_roll[0], self._secondary_natural_roll[0]) == 1
+        elif self.has_advantage:
+            return self._natural_roll[0] == 1 and self._secondary_natural_roll[0] == 1
+        else:
+            return self._natural_roll[0] == 1
 
-    def __repr__(self):
-        bonus_sum = sum(bonus.amount for bonus in self.__bonuses)
-        final_multiplier = self.__get_final_multiplier()
-        basic_repr = f"{self.__die_rolled}+{bonus_sum}"
-        return basic_repr if final_multiplier == 1 else f"{final_multiplier}x({basic_repr})"
+    @property
+    def result(self):
+        if self.is_critical_success:
+            return NAT20
+        elif self.is_critical_failure:
+            return NAT1
+        else:
+            return super().result
 
 
 class ConstantRollResult(RollResult):
@@ -105,8 +141,8 @@ class Die:
         self.__amount = amount
         self.__type = die_type
 
-    def simple_roll(self) -> int:
-        return sum(randint(1, self.__type.value) for _ in range(self.__amount))
+    def roll(self) -> List[int]:
+        return [randint(1, self.__type.value) for _ in range(self.__amount)]
 
     @property
     def type(self):
@@ -114,3 +150,4 @@ class Die:
 
     def __repr__(self):
         return f"{self.__amount}{self.__type.name}"
+

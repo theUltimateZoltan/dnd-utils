@@ -35,7 +35,7 @@ class Encounter:
 
     def __determine_initiative(self) -> None:
         ordered_list = [c for c in self.__players | self.__npc]
-        ordered_list.sort(key=lambda c: c.roll_initiative())
+        ordered_list.sort(key=lambda c: c.roll_initiative().result)
         for c in ordered_list:
             self.__initiative_queue.put(c)
 
