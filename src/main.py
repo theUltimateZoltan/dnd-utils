@@ -187,6 +187,7 @@ class Creature(MapItem):
         self._hit_die_type: DieType = DieType.d8
         self._damage_taken: int = 0
         self.__main_weapon: Weapon | None = None
+        self.__conditions: Set[str] = set()
 
     def get_modifier(self, ability: str):
         return (self._ability_scores._asdict().get(ability) - 10) // 2
@@ -206,9 +207,14 @@ class Creature(MapItem):
 
     def damage(self, amount: int, dmg_type: DamageType) -> None:
         self._damage_taken += amount
+        if self.current_hp <= 0:
+            self.gain_condition("down")
 
     def heal(self, amount: int) -> None:
         self._damage_taken = max(self._damage_taken - amount, 0)
+
+    def gain_condition(self, condition: str) -> None:
+        self.__conditions.add(condition)
 
     @property
     def armor_class(self) -> int:
@@ -236,9 +242,11 @@ class Creature(MapItem):
         self.__main_weapon = weapon
 
     def __repr__(self):
-        return f"{self._name} ({self.current_hp})"
+        return f"{self._name} ({self.current_hp if 'down' not in self.__conditions else 'down'})"
 
     def get_available_actions(self, grid: Map) -> Set[Action]:
+        if "down" in self.__conditions:
+            return set()
         return {
             MeleeAttack(self, target) for target in grid.get_adjacent_creatures(grid.find(self))
         }
