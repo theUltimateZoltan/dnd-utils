@@ -11,6 +11,10 @@ class Location:
     y: int
 
 
+class ItemNotFoundException(Exception):
+    pass
+
+
 class Grid:
     def __init__(self, size_x: int, size_y: int):
         self.__cells: List[List[GridItem | None]] = [[None for _ in range(size_y)] for _ in range(size_x)]
@@ -31,7 +35,10 @@ class Grid:
         self.place(item, dest)
 
     def find(self, item) -> Location:
-        return self.__items_index.get(item.uuid)
+        try:
+            return self.__items_index.get(item.uuid)
+        except IndexError:
+            raise ItemNotFoundException("Item not in grid")
 
     def get_adjacent_items(self, loc: Location) -> Set[GridItem]:
         all_adjacent_indices = {

@@ -1,12 +1,16 @@
 from creatures import Creature, Action
-from grid import Grid, Location
+from grid import Grid, Location, ItemNotFoundException
 from typing import Set, Generator
 from queue import Queue
 
 
 class Turn:
     def __init__(self, grid: Grid, player: Creature):
-        assert grid.find(player)
+        try:
+            grid.find(player)
+        except ItemNotFoundException:
+            raise Exception("Turn created with player not on the grid")
+
         self.__player: Creature = player
         self.__grid: Grid = grid
         self.__available_actions = self.__player.get_available_actions(grid)
