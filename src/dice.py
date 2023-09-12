@@ -101,7 +101,8 @@ class StressDieRollResult(RollResult):
 
     @property
     def is_success(self) -> bool:
-        assert self.__difficulty_class, "No DC was set."
+        if self.__difficulty_class is None:
+            raise Exception("No DC was set.")
         return self.result >= self.__difficulty_class
 
     @property
