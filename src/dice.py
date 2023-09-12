@@ -57,7 +57,10 @@ class RollResult:
         self.__multipliers.add(multiplier)
 
     def __get_final_multiplier(self):
-        return reduce(operator.mul, {mul.multiplier for mul in self.__multipliers} | {1})
+        if len(self.__multipliers) > 0:
+            return reduce(operator.mul, {mul.multiplier for mul in self.__multipliers})
+        else:
+            return 1
 
     @property
     def result(self) -> int | float:
