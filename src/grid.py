@@ -1,11 +1,14 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from tabulate import tabulate
-from collections import namedtuple
 from typing import List, Set, Dict
 from uuid import UUID, uuid4
 
 
-Location = namedtuple("Location", ["x", "y"])
+@dataclass(eq=True, frozen=True)
+class Location:
+    x: int
+    y: int
 
 
 class Grid:

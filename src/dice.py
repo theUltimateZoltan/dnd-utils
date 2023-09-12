@@ -1,11 +1,12 @@
 from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import Set, List
 from random import randint
 from functools import reduce
 import operator
 import math
 from enum import Enum
-from collections import namedtuple
 
 
 NAT20 = math.inf
@@ -28,8 +29,16 @@ class AdvantageSource(Enum):
     stealth = "stealth"
 
 
-DieRollBonus = namedtuple("DieRollBonus", ["source_description", "amount"])
-DieRollMultiplier = namedtuple("DieRollBonus", ["source_description", "multiplier"])
+@dataclass(eq=True, frozen=True)
+class DieRollBonus:
+    source_description: str
+    amount: int
+
+
+@dataclass(eq=True, frozen=True)
+class DieRollMultiplier:
+    source_description: str
+    multiplier: float
 
 
 class RollResult:
@@ -62,7 +71,7 @@ class RollResult:
     def __repr__(self):
         bonus_sum = sum(bonus.amount for bonus in self.__bonuses)
         final_multiplier = self.__get_final_multiplier()
-        basic_repr = f"{self._die_rolled}+{bonus_sum}"
+        basic_repr = f"{self._die_rolled}+{bonus_sum}" if bonus_sum != 0 else self._die_rolled
         return basic_repr if final_multiplier == 1 else f"{final_multiplier}x({basic_repr})"
 
 
@@ -126,14 +135,7 @@ class StressDieRollResult(RollResult):
 class ConstantRollResult(RollResult):
     def __init__(self, value: int):
         super().__init__(Die(0, DieType.dummy))
-        self.__const_value = value
-
-    @property
-    def result(self):
-        return self.__const_value
-
-    def __repr__(self):
-        return str(self.__const_value)
+        self._natural_roll = [value]
 
 
 class Die:
