@@ -111,7 +111,7 @@ class StressDieRollResult(RollResult):
     @property
     def is_critical_success(self) -> bool:
         if self.has_advantage:
-            return max(self._natural_roll[0], self._secondary_natural_roll[0]) == 20
+            return any(roll == 20 for roll in [self._natural_roll[0], self._secondary_natural_roll[0]])
         elif self.has_disadvantage:
             return self._natural_roll[0] == 20 and self._secondary_natural_roll[0] == 20
         else:
