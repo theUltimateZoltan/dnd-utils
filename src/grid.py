@@ -41,16 +41,12 @@ class Grid:
             raise ItemNotFoundException("Item not in grid")
 
     def get_adjacent_items(self, loc: Location) -> Set[GridItem]:
-        all_adjacent_indices = {
-                Location(loc.x + 1, loc.y),
-                Location(loc.x + 1, loc.y + 1),
-                Location(loc.x, loc.y + 1),
-                Location(loc.x - 1, loc.y + 1),
-                Location(loc.x - 1, loc.y),
-                Location(loc.x - 1, loc.y - 1),
-                Location(loc.x, loc.y - 1),
-                Location(loc.x + 1, loc.y - 1)
-            }
+        all_adjacent_indices = {}
+        for x in range(loc.x-1,loc.x+2):
+            for y in range(loc.y-1,loc.y+2):
+                if x < 0 or y < 0 or x > len(self.__cells)-1 or y > len(self.__cells[0])-1:
+                    continue
+                all_adjacent_indices.add(Location(x,y))
 
         if loc.x == 0:
             indices_left = {
