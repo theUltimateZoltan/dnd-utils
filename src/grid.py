@@ -20,6 +20,14 @@ class Grid:
         self.__cells: List[List[GridItem | None]] = [[None for _ in range(size_y)] for _ in range(size_x)]
         self.__items_index: Dict[UUID, Location] = dict()
 
+    @property
+    def width(self):
+        return len(self.__cells)-1
+
+    @property
+    def height(self):
+        return len(self.__cells[0])-1
+
     def place(self, map_item: GridItem, loc: Location):
         self.__items_index[map_item.uuid] = loc
         self.__cells[loc.y][loc.x] = map_item
@@ -29,6 +37,9 @@ class Grid:
         self.__items_index.pop(content.uuid)
         self.__cells[loc.y][loc.x] = None
         return content
+
+    def location_in_bounds(self, loc: Location):
+        return 0 <= loc.x <= self.width and 0 <= loc.y <= self.height
 
     def move(self, source: Location, dest: Location):
         item = self.clear(source)
@@ -41,12 +52,12 @@ class Grid:
             raise ItemNotFoundException("Item not in grid")
 
     def get_adjacent_items(self, loc: Location) -> Set[GridItem]:
-        all_adjacent_indices = {}
-        for x in range(loc.x-1,loc.x+2):
-            for y in range(loc.y-1,loc.y+2):
-                if x < 0 or y < 0 or x > len(self.__cells)-1 or y > len(self.__cells[0])-1:
-                    continue
-                all_adjacent_indices.add(Location(x,y))
+        all_adjacent_indices = set()
+        for x in range(loc.x-1, loc.x+2):
+            for y in range(loc.y-1, loc.y+2):
+                adj = Location(x, y)
+                if self.location_in_bounds(adj) and adj != loc:
+                    all_adjacent_indices.add(adj)
 
         if loc.x == 0:
             indices_left = {

@@ -45,7 +45,6 @@ class RollResult:
     def __init__(self, die: Die):
         self._die_rolled: Die = die
         self._natural_roll: List[int] = die.roll()
-        self._secondary_natural_roll: List[int] = die.roll()
         self.__bonuses: Set[DieRollBonus] = set()
         self.__multipliers: Set[DieRollMultiplier] = set()
         self.tag: str | None = None
@@ -79,11 +78,15 @@ class RollResult:
 
 
 class StressDieRollResult(RollResult):
+    CRIT_SUCCESS_VALUE: int = 20
+    CRIT_FAILURE_VALUE: int = 1
+
     def __init__(self):
         super().__init__(Die(1, DieType.d20))
         self.__difficulty_class: int | None = None
         self.__advantages: Set[AdvantageSource] = set()
         self.__disadvantages: Set[AdvantageSource] = set()
+        self._secondary_natural_roll: List[int] = self._die_rolled.roll()
 
     def add_advantage(self, source: AdvantageSource) -> None:
         self.__advantages.add(source)
@@ -108,23 +111,20 @@ class StressDieRollResult(RollResult):
             raise Exception("No DC was set.")
         return self.result >= self.__difficulty_class
 
+    def __get_determining_natural_roll_result(self) -> int:
+        if self.has_advantage or self.has_disadvantage:
+            determining_function = max if self.has_advantage else min
+            return determining_function(self._natural_roll[0], self._secondary_natural_roll[0])
+        else:
+            return self._natural_roll[0]
+
     @property
     def is_critical_success(self) -> bool:
-        if self.has_advantage:
-            return any(roll == 20 for roll in [self._natural_roll[0], self._secondary_natural_roll[0]])
-        elif self.has_disadvantage:
-            return self._natural_roll[0] == 20 and self._secondary_natural_roll[0] == 20
-        else:
-            return self._natural_roll[0] == 20
+        return self.__get_determining_natural_roll_result() == StressDieRollResult.CRIT_SUCCESS_VALUE
 
     @property
     def is_critical_failure(self) -> bool:
-        if self.has_disadvantage:
-            return min(self._natural_roll[0], self._secondary_natural_roll[0]) == 1
-        elif self.has_advantage:
-            return self._natural_roll[0] == 1 and self._secondary_natural_roll[0] == 1
-        else:
-            return self._natural_roll[0] == 1
+        return self.__get_determining_natural_roll_result() == StressDieRollResult.CRIT_FAILURE_VALUE
 
     @property
     def result(self):

@@ -18,6 +18,14 @@ class AbilityScores:
     charisma: int
 
 
+class Ability(Enum):
+    STR = "strength"
+    DEX = "dexterity"
+    CON = "constitution"
+    INT = "intelligence"
+    WIS = "wisdom"
+    CHA = "charisma"
+
 
 class Condition(Enum):
     down = "down"
@@ -51,13 +59,13 @@ class Creature(GridItem):
         self.__main_weapon: Weapon | None = None
         self.__conditions: Set[Condition] = set()
 
-    def get_modifier(self, ability: str):
-        return (self._ability_scores.__dict__.get(ability) - 10) // 2
+    def get_modifier(self, ability: Ability):
+        return (self._ability_scores.__dict__.get(ability.value) - 10) // 2
 
     @property
     def max_hp(self) -> int:
         return self._hit_die_type.value + \
-               (self._level-1) * ((self._hit_die_type.value // 2) + self.get_modifier("constitution"))
+               (self._level-1) * ((self._hit_die_type.value // 2) + self.get_modifier(Ability.CON))
 
     @property
     def proficiency_bonus(self) -> int:
@@ -84,13 +92,13 @@ class Creature(GridItem):
 
     def roll_initiative(self) -> StressDieRollResult:
         initiative_roll = StressDieRollResult()
-        initiative_roll.add_bonus(DieRollBonus("dex", self.get_modifier("dexterity")))
+        initiative_roll.add_bonus(DieRollBonus(Ability.DEX.value, self.get_modifier(Ability.DEX)))
         return initiative_roll
 
     def roll_melee_damage(self) -> RollResult:
         if self.__main_weapon:
             base_damage_roll = self.__main_weapon.roll_damage()
-            base_damage_roll.add_bonus(DieRollBonus("str", self.get_modifier("strength")))
+            base_damage_roll.add_bonus(DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR)))
             base_damage_roll.add_bonus(DieRollBonus("proficiency", self.proficiency_bonus))
             return base_damage_roll
         else:
@@ -98,7 +106,7 @@ class Creature(GridItem):
 
     def roll_melee_hit(self) -> StressDieRollResult:
         hit_roll = StressDieRollResult()
-        hit_roll.add_bonus(DieRollBonus("str", self.get_modifier("strength")))
+        hit_roll.add_bonus(DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR)))
         hit_roll.add_bonus(DieRollBonus("proficiency", self.proficiency_bonus))
         return hit_roll
 
