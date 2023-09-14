@@ -1,11 +1,22 @@
 from __future__ import annotations
-
 from dataclasses import dataclass
 from grid import GridItem, Grid
 from dice import DieType, RollResult, ConstantRollResult, DieRollBonus, DieRollMultiplier, StressDieRollResult
 from weapons import Weapon, DamageType
 from typing import Set, List, cast
 from enum import Enum
+
+
+class MovementExceededSpeedException(Exception):
+    pass
+
+
+@dataclass
+class CreatureTurnStats:
+    distance_moved: int = 0
+    actions_used: int = 0
+    bonus_actions_used: int = 0
+    reactions_used: int = 0
 
 
 @dataclass(eq=True, frozen=True)
@@ -58,6 +69,7 @@ class Creature(GridItem):
         self._damage_taken: int = 0
         self.__main_weapon: Weapon | None = None
         self.__conditions: Set[Condition] = set()
+        self.__turn_stats = CreatureTurnStats()
 
     def get_modifier(self, ability: Ability):
         return (self._ability_scores.__dict__.get(ability.value) - 10) // 2
@@ -74,6 +86,18 @@ class Creature(GridItem):
     @property
     def current_hp(self) -> int:
         return self.max_hp - self._damage_taken
+
+    @property
+    def speed(self) -> int:
+        return 6
+
+    def start_turn(self) -> None:
+        self.__turn_stats = CreatureTurnStats()
+
+    def register_movement(self, distance: int) -> None:
+        if self.__turn_stats.distance_moved + distance > self.speed:
+            raise MovementExceededSpeedException()
+        self.__turn_stats.distance_moved += distance
 
     def damage(self, amount: int, dmg_type: DamageType) -> None:
         self._damage_taken += amount
@@ -179,3 +203,4 @@ class MeleeAttack(Action):
 
     def __repr__(self):
         return f"Melee on {self.__target}"
+
