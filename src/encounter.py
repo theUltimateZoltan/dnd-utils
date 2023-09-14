@@ -32,8 +32,8 @@ class Turn:
 class Encounter:
     def __init__(self):
         self.__grid: Grid = Grid(3, 3)
-        self.__players: Set[Creature] = set()  # TODO convert to sorted structure for search efficiency (heap?)
-        self.__npc: Set[Creature] = set()      # "
+        self.__players: Set[Creature] = set()
+        self.__npc: Set[Creature] = set()
         self.__active: Creature | None = None
         self.__initiative_queue: Queue = Queue()
 
@@ -59,7 +59,6 @@ class Encounter:
 
     def initialize(self):
         self.__determine_initiative()
-        # TODO determine surprise
 
     def __repr__(self):
         return self.__grid.__repr__()
