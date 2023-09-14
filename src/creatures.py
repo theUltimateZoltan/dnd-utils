@@ -159,7 +159,7 @@ class Action:
     def __init__(self):
         self.__dice_rolled = list()
 
-    def _log_die_roll(self, roll: RollResult):
+    def _store_roll(self, roll: RollResult):
         self.__dice_rolled.append(roll)
 
     def execute(self) -> None:
@@ -191,14 +191,14 @@ class MeleeAttack(Action):
         self.__hit_roll: StressDieRollResult = self.__attacker.roll_melee_hit()
         self.__hit_roll.set_dc(self.__target.armor_class)
         self.__hit_roll.tag = "hit"
-        self._log_die_roll(self.__hit_roll)
+        self._store_roll(self.__hit_roll)
 
         if self.__hit_roll.is_success:
             self.__damage_roll: RollResult = self.__attacker.roll_melee_damage()
             self.__damage_roll.tag = "damage"
             if self.__hit_roll.is_critical_success:
                 self.__damage_roll.add_multiplier(DieRollMultiplier("critical hit", 2))
-            self._log_die_roll(self.__damage_roll)
+            self._store_roll(self.__damage_roll)
             self.__target.damage(self.__damage_roll.result, DamageType.bludgeoning)
 
     def __repr__(self):
