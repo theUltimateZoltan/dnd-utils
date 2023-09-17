@@ -1,70 +1,31 @@
-from collections import namedtuple
-from typing import Dict, List
-from uuid import uuid4, UUID
-from tabulate import tabulate
-
-
-class MapItem:
-    def __init__(self):
-        self.__uuid = uuid4()
-
-    @property
-    def uuid(self):
-        return self.__uuid
-
-
-class WrittenMapItem(MapItem):
-    def __init__(self, text: str):
-        super().__init__()
-        self.__text = text
-
-    def __repr__(self):
-        return self.__text
-
-
-Location = namedtuple("Location", ["x", "y"])
-
-
-class Map:
-    def __init__(self, size_x: int, size_y: int):
-        self.__cells: List[List[MapItem | None]] = [[None for _ in range(size_y)] for _ in range(size_x)]
-        self.__items_index: Dict[UUID, Location] = dict()
-
-    def place(self, map_item: MapItem, loc: Location):
-        self.__items_index[map_item.uuid] = loc
-        self.__cells[loc.y][loc.x] = map_item
-
-    def clear(self, loc: Location) -> MapItem | None:
-        content = self.__cells[loc.y][loc.x]
-        self.__items_index.pop(content.uuid)
-        self.__cells[loc.y][loc.x] = None
-        return content
-
-    def move(self, source: Location, dest: Location):
-        item = self.clear(source)
-        self.place(item, dest)
-
-    def find(self, item) -> Location:
-        return self.__items_index.get(item.uuid)
-
-    def __repr__(self):
-        return tabulate(self.__cells, tablefmt='grid')
+from __future__ import annotations
+from dice import Die, DieType
+from grid import Location
+from encounter import Encounter
+from creatures import Creature
+from weapons import Weapon
 
 
 def main() -> None:
-    map = Map(3, 3)
-    player = WrittenMapItem("player")
-    map.place(player, Location(0, 0))
-    print(map)
-    while True:
-        user_input = input(f"Command: ").lower()
-        if user_input == "exit":
-            break
-        elif user_input == "move":
-            x = int(input("to where? x: "))
-            y = int(input("to where? y: "))
-            map.move(map.find(player), Location(x, y))
-            print(map)
+    encounter: Encounter = Encounter()
+    player = Creature.Builder().name("Player").level(3).build()
+    player.equip_weapon(Weapon("Sword", Die(1, DieType.d8)))
+    enemy = Creature.Builder().name("Enemy1").level(3).build()
+    enemy2 = Creature.Builder().name("Enemy2").level(2).build()
+    encounter.add_player(player, Location(1, 1))
+    encounter.add_npc(enemy, Location(1, 0))
+    encounter.add_npc(enemy2, Location(2, 0))
+    encounter.initialize()
+    for turn in encounter.turns():
+        print(encounter)
+        available_moves = turn.get_all_available_moves()
+        print(f"available moves for {turn.player}: ")
+        print(available_moves)
+        choice = input("Choose move: ")
+        for move in available_moves:
+            if repr(move) == choice:
+                move.execute()
+                print(move.describe())
 
 
 if __name__ == "__main__":
