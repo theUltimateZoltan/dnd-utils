@@ -22,7 +22,6 @@ class DamageType(Enum):
     thunder = "thunder"
 
 
-
 @dataclass
 class RollAffects:
     immunities: List[DamageType]
@@ -60,7 +59,9 @@ class Weapon:
         self.__name: str = name
         self.__damage_die: List[Die] = damage_dice
         self._base_damage_type: DamageType = damage_type
-        self._bonus_damages: DefaultDict[DamageType, List[Die]] = defaultdict(lambda _: [])
+        self._bonus_damages: DefaultDict[DamageType, List[Die]] = defaultdict(
+            lambda _: []
+        )
 
     def roll_damage(self) -> CompoundRollResult:
         total_damage = CompoundRollResult()

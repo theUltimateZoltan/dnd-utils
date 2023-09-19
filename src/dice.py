@@ -63,7 +63,9 @@ class RollResult:
 
     @property
     def result(self) -> int | float:
-        unmultiplied_result = sum(self._natural_roll) + sum(bonus.amount for bonus in self.__bonuses)
+        unmultiplied_result = sum(self._natural_roll) + sum(
+            bonus.amount for bonus in self.__bonuses
+        )
         return self.__get_final_multiplier() * unmultiplied_result
 
     @property
@@ -73,8 +75,14 @@ class RollResult:
     def __repr__(self):
         bonus_sum = sum(bonus.amount for bonus in self.__bonuses)
         final_multiplier = self.__get_final_multiplier()
-        basic_repr = f"{self._die_rolled}+{bonus_sum}" if bonus_sum != 0 else self._die_rolled
-        return basic_repr if final_multiplier == 1 else f"{final_multiplier}x({basic_repr})"
+        basic_repr = (
+            f"{self._die_rolled}+{bonus_sum}" if bonus_sum != 0 else self._die_rolled
+        )
+        return (
+            basic_repr
+            if final_multiplier == 1
+            else f"{final_multiplier}x({basic_repr})"
+        )
 
 
 class StressDieRollResult(RollResult):
@@ -114,17 +122,25 @@ class StressDieRollResult(RollResult):
     def __get_determining_natural_roll_result(self) -> int:
         if self.has_advantage or self.has_disadvantage:
             determining_function = max if self.has_advantage else min
-            return determining_function(self._natural_roll[0], self._secondary_natural_roll[0])
+            return determining_function(
+                self._natural_roll[0], self._secondary_natural_roll[0]
+            )
         else:
             return self._natural_roll[0]
 
     @property
     def is_critical_success(self) -> bool:
-        return self.__get_determining_natural_roll_result() == StressDieRollResult.CRIT_SUCCESS_VALUE
+        return (
+            self.__get_determining_natural_roll_result()
+            == StressDieRollResult.CRIT_SUCCESS_VALUE
+        )
 
     @property
     def is_critical_failure(self) -> bool:
-        return self.__get_determining_natural_roll_result() == StressDieRollResult.CRIT_FAILURE_VALUE
+        return (
+            self.__get_determining_natural_roll_result()
+            == StressDieRollResult.CRIT_FAILURE_VALUE
+        )
 
     @property
     def result(self):

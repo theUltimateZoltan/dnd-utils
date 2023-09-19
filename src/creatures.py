@@ -1,7 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from grid import GridItem, Grid
-from dice import DieType, RollResult, ConstantRollResult, DieRollBonus, DieRollMultiplier, StressDieRollResult
+from dice import (
+    DieType,
+    RollResult,
+    ConstantRollResult,
+    DieRollBonus,
+    DieRollMultiplier,
+    StressDieRollResult,
+)
 from weapons import Weapon, DamageType
 from typing import Set, List, cast
 from enum import Enum
@@ -76,12 +83,13 @@ class Creature(GridItem):
 
     @property
     def max_hp(self) -> int:
-        return self._hit_die_type.value + \
-               (self._level-1) * ((self._hit_die_type.value // 2) + self.get_modifier(Ability.CON))
+        return self._hit_die_type.value + (self._level - 1) * (
+            (self._hit_die_type.value // 2) + self.get_modifier(Ability.CON)
+        )
 
     @property
     def proficiency_bonus(self) -> int:
-        return 2 + ((self._level-1) // 4)
+        return 2 + ((self._level - 1) // 4)
 
     @property
     def current_hp(self) -> int:
@@ -116,21 +124,29 @@ class Creature(GridItem):
 
     def roll_initiative(self) -> StressDieRollResult:
         initiative_roll = StressDieRollResult()
-        initiative_roll.add_bonus(DieRollBonus(Ability.DEX.value, self.get_modifier(Ability.DEX)))
+        initiative_roll.add_bonus(
+            DieRollBonus(Ability.DEX.value, self.get_modifier(Ability.DEX))
+        )
         return initiative_roll
 
     def roll_melee_damage(self) -> RollResult:
         if self.__main_weapon:
             base_damage_roll = self.__main_weapon.roll_damage()
-            base_damage_roll.add_bonus(DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR)))
-            base_damage_roll.add_bonus(DieRollBonus("proficiency", self.proficiency_bonus))
+            base_damage_roll.add_bonus(
+                DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR))
+            )
+            base_damage_roll.add_bonus(
+                DieRollBonus("proficiency", self.proficiency_bonus)
+            )
             return base_damage_roll
         else:
             return ConstantRollResult(1)
 
     def roll_melee_hit(self) -> StressDieRollResult:
         hit_roll = StressDieRollResult()
-        hit_roll.add_bonus(DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR)))
+        hit_roll.add_bonus(
+            DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR))
+        )
         hit_roll.add_bonus(DieRollBonus("proficiency", self.proficiency_bonus))
         return hit_roll
 
@@ -144,7 +160,8 @@ class Creature(GridItem):
         if Condition.down in self.__conditions:
             return set()
         return {
-            MeleeAttack(self, cast(Creature, target)) for target in grid.get_adjacent_items(grid.find(self))
+            MeleeAttack(self, cast(Creature, target))
+            for target in grid.get_adjacent_items(grid.find(self))
             if issubclass(type(target), Creature)
         }
 
@@ -170,7 +187,11 @@ class Action:
         for roll in self.__dice_rolled:
             roll_result = f"{roll.tag}: rolled {roll} for {roll.result}."
             if type(roll) == StressDieRollResult:
-                success_description = "Critical " if (roll.is_critical_success or roll.is_critical_failure) else ""
+                success_description = (
+                    "Critical "
+                    if (roll.is_critical_success or roll.is_critical_failure)
+                    else ""
+                )
                 success_description += "Success!" if roll.is_success else "Failure..."
                 rolls_descriptions.append(f"{roll_result} {success_description}")
             else:
@@ -203,4 +224,3 @@ class MeleeAttack(Action):
 
     def __repr__(self):
         return f"Melee on {self.__target}"
-

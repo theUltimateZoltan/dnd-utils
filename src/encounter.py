@@ -8,9 +8,15 @@ from queue import Queue
 class Turn:
     def __init__(self, encounter: Encounter):
         self.__encounter = encounter
-        self.__available_actions = encounter.active_creature.get_available_actions(encounter.grid)
-        self.__available_bonus_actions = encounter.active_creature.get_available_bonus_actions(encounter.grid)
-        self.__available_reactions = encounter.active_creature.get_available_reactions(encounter.grid)
+        self.__available_actions = encounter.active_creature.get_available_actions(
+            encounter.grid
+        )
+        self.__available_bonus_actions = (
+            encounter.active_creature.get_available_bonus_actions(encounter.grid)
+        )
+        self.__available_reactions = encounter.active_creature.get_available_reactions(
+            encounter.grid
+        )
 
     @property
     def player(self):
