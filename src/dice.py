@@ -95,11 +95,11 @@ class StressDieRollResult(RollResult):
         self.__disadvantages.add(source)
 
     @property
-    def has_advantage(self):
+    def has_advantage(self) -> bool:
         return len(self.__advantages) > len(self.__disadvantages)
 
     @property
-    def has_disadvantage(self):
+    def has_disadvantage(self) -> bool:
         return len(self.__advantages) < len(self.__disadvantages)
 
     def set_dc(self, dc: int) -> None:
@@ -156,4 +156,3 @@ class Die:
 
     def __repr__(self):
         return f"{self.__amount}{self.__type.name}"
-
