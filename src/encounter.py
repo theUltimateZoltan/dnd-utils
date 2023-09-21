@@ -6,14 +6,20 @@ from queue import Queue
 
 
 class Turn:
-    def __init__(self, encounter: Encounter):
+    def __init__(self, encounter: Encounter) -> None:
         self.__encounter = encounter
-        self.__available_actions = encounter.active_creature.get_available_actions(encounter.grid)
-        self.__available_bonus_actions = encounter.active_creature.get_available_bonus_actions(encounter.grid)
-        self.__available_reactions = encounter.active_creature.get_available_reactions(encounter.grid)
+        self.__available_actions = encounter.active_creature.get_available_actions(
+            encounter.grid
+        )
+        self.__available_bonus_actions = (
+            encounter.active_creature.get_available_bonus_actions(encounter.grid)
+        )
+        self.__available_reactions = encounter.active_creature.get_available_reactions(
+            encounter.grid
+        )
 
     @property
-    def player(self):
+    def player(self) -> Creature | None:
         return self.__encounter.active_creature
 
     def get_all_available_moves(self) -> Set[Action]:
@@ -30,19 +36,21 @@ class Turn:
 
 
 class Encounter:
-    def __init__(self):
+    def __init__(self) -> None:
         self.__grid: Grid = Grid(3, 3)
         self.__players: Set[Creature] = set()
         self.__npc: Set[Creature] = set()
         self.__active: Creature | None = None
-        self.__initiative_queue: Queue = Queue()
+        self.__initiative_queue: Queue[Creature] = Queue()
 
     @property
-    def active_creature(self):
+    def active_creature(self) -> Creature:
+        if self.__active is None:
+            raise RuntimeError("No active creature added to encounter!")
         return self.__active
 
     @property
-    def grid(self):
+    def grid(self) -> Grid:
         return self.__grid
 
     def __determine_initiative(self) -> None:
@@ -57,16 +65,16 @@ class Encounter:
             yield Turn(self)
             self.__initiative_queue.put(self.__active)
 
-    def add_player(self, player: Creature, location: Location):
+    def add_player(self, player: Creature, location: Location) -> None:
         self.__players.add(player)
         self.__grid.place(player, location)
 
-    def add_npc(self, npc: Creature, location: Location):
+    def add_npc(self, npc: Creature, location: Location) -> None:
         self.__players.add(npc)
         self.__grid.place(npc, location)
 
-    def initialize(self):
+    def initialize(self) -> None:
         self.__determine_initiative()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__grid.__repr__()

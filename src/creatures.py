@@ -1,7 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from grid import GridItem, Grid
-from dice import DieType, RollResult, ConstantRollResult, DieRollBonus, DieRollMultiplier, StressDieRollResult
+from dice import (
+    DieType,
+    RollResult,
+    ConstantRollResult,
+    DieRollBonus,
+    DieRollMultiplier,
+    StressDieRollResult,
+)
 from weapons import Weapon, DamageType
 from typing import Set, List, cast
 from enum import Enum
@@ -28,6 +35,9 @@ class AbilityScores:
     wisdom: int
     charisma: int
 
+    def get(self, ability: Ability) -> int:
+        return self.__dict__[ability.value]  # type: ignore
+
 
 class Ability(Enum):
     STR = "strength"
@@ -46,7 +56,7 @@ class Condition(Enum):
 
 class Creature(GridItem):
     class Builder:
-        def __init__(self):
+        def __init__(self) -> None:
             self.__creature: Creature = Creature()
 
         def name(self, name: str) -> Creature.Builder:
@@ -60,7 +70,7 @@ class Creature(GridItem):
         def build(self) -> Creature:
             return self.__creature
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._ability_scores: AbilityScores = AbilityScores(10, 10, 10, 10, 10, 10)
         self._name: str = "Creature"
@@ -71,20 +81,21 @@ class Creature(GridItem):
         self.__conditions: Set[Condition] = set()
         self.__turn_stats = CreatureTurnStats()
 
-    def get_modifier(self, ability: Ability):
-        return (self._ability_scores.__dict__.get(ability.value) - 10) // 2
+    def get_modifier(self, ability: Ability) -> int | float:
+        return (self._ability_scores.get(ability) - 10) // 2
 
     @property
-    def max_hp(self) -> int:
-        return self._hit_die_type.value + \
-               (self._level-1) * ((self._hit_die_type.value // 2) + self.get_modifier(Ability.CON))
+    def max_hp(self) -> int | float:
+        return self._hit_die_type.value + (self._level - 1) * (
+            (self._hit_die_type.value // 2) + self.get_modifier(Ability.CON)
+        )
 
     @property
     def proficiency_bonus(self) -> int:
-        return 2 + ((self._level-1) // 4)
+        return 2 + ((self._level - 1) // 4)
 
     @property
-    def current_hp(self) -> int:
+    def current_hp(self) -> int | float:
         return self.max_hp - self._damage_taken
 
     @property
@@ -116,35 +127,44 @@ class Creature(GridItem):
 
     def roll_initiative(self) -> StressDieRollResult:
         initiative_roll = StressDieRollResult()
-        initiative_roll.add_bonus(DieRollBonus(Ability.DEX.value, self.get_modifier(Ability.DEX)))
+        initiative_roll.add_bonus(
+            DieRollBonus(Ability.DEX.value, int(self.get_modifier(Ability.DEX)))
+        )
         return initiative_roll
 
     def roll_melee_damage(self) -> RollResult:
         if self.__main_weapon:
             base_damage_roll = self.__main_weapon.roll_damage()
-            base_damage_roll.add_bonus(DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR)))
-            base_damage_roll.add_bonus(DieRollBonus("proficiency", self.proficiency_bonus))
+            base_damage_roll.add_bonus(
+                DieRollBonus(Ability.STR.value, int(self.get_modifier(Ability.STR)))
+            )
+            base_damage_roll.add_bonus(
+                DieRollBonus("proficiency", self.proficiency_bonus)
+            )
             return base_damage_roll
         else:
             return ConstantRollResult(1)
 
     def roll_melee_hit(self) -> StressDieRollResult:
         hit_roll = StressDieRollResult()
-        hit_roll.add_bonus(DieRollBonus(Ability.STR.value, self.get_modifier(Ability.STR)))
+        hit_roll.add_bonus(
+            DieRollBonus(Ability.STR.value, int(self.get_modifier(Ability.STR)))
+        )
         hit_roll.add_bonus(DieRollBonus("proficiency", self.proficiency_bonus))
         return hit_roll
 
-    def equip_weapon(self, weapon: Weapon):
+    def equip_weapon(self, weapon: Weapon) -> None:
         self.__main_weapon = weapon
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self._name} ({self.current_hp if Condition.down not in self.__conditions else 'down'})"
 
     def get_available_actions(self, grid: Grid) -> Set[Action]:
         if Condition.down in self.__conditions:
             return set()
         return {
-            MeleeAttack(self, cast(Creature, target)) for target in grid.get_adjacent_items(grid.find(self))
+            MeleeAttack(self, cast(Creature, target))
+            for target in grid.get_adjacent_items(grid.find(self))
             if issubclass(type(target), Creature)
         }
 
@@ -156,10 +176,10 @@ class Creature(GridItem):
 
 
 class Action:
-    def __init__(self):
-        self.__dice_rolled = list()
+    def __init__(self) -> None:
+        self.__dice_rolled: List[RollResult] = list()
 
-    def _store_roll(self, roll: RollResult):
+    def _store_roll(self, roll: RollResult) -> None:
         self.__dice_rolled.append(roll)
 
     def execute(self) -> None:
@@ -170,7 +190,11 @@ class Action:
         for roll in self.__dice_rolled:
             roll_result = f"{roll.tag}: rolled {roll} for {roll.result}."
             if type(roll) == StressDieRollResult:
-                success_description = "Critical " if (roll.is_critical_success or roll.is_critical_failure) else ""
+                success_description = (
+                    "Critical "
+                    if (roll.is_critical_success or roll.is_critical_failure)
+                    else ""
+                )
                 success_description += "Success!" if roll.is_success else "Failure..."
                 rolls_descriptions.append(f"{roll_result} {success_description}")
             else:
@@ -180,7 +204,7 @@ class Action:
 
 
 class MeleeAttack(Action):
-    def __init__(self, attacker: Creature, target: Creature):
+    def __init__(self, attacker: Creature, target: Creature) -> None:
         super().__init__()
         self.__attacker: Creature = attacker
         self.__target: Creature = target
@@ -188,19 +212,18 @@ class MeleeAttack(Action):
         self.__damage_roll: RollResult | None = None
 
     def execute(self) -> None:
-        self.__hit_roll: StressDieRollResult = self.__attacker.roll_melee_hit()
+        self.__hit_roll = self.__attacker.roll_melee_hit()
         self.__hit_roll.set_dc(self.__target.armor_class)
         self.__hit_roll.tag = "hit"
         self._store_roll(self.__hit_roll)
 
         if self.__hit_roll.is_success:
-            self.__damage_roll: RollResult = self.__attacker.roll_melee_damage()
+            self.__damage_roll = self.__attacker.roll_melee_damage()
             self.__damage_roll.tag = "damage"
             if self.__hit_roll.is_critical_success:
                 self.__damage_roll.add_multiplier(DieRollMultiplier("critical hit", 2))
             self._store_roll(self.__damage_roll)
-            self.__target.damage(self.__damage_roll.result, DamageType.bludgeoning)
+            self.__target.damage(int(self.__damage_roll.result), DamageType.bludgeoning)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Melee on {self.__target}"
-
