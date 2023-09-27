@@ -59,8 +59,8 @@ class Creature(GridItem):
         self._damage_taken: int = 0
         self.__main_weapon: Weapon | None = None
         self.__conditions: Set[Condition] = set()
-        self.__depletions: Dict[ActionDepletionType, int] = defaultdict(default_factory=lambda: 0)
-        self.__depletion_limits: Dict[ActionDepletionType, int] = defaultdict(default_factory=lambda: 1)
+        self.__depletions: Dict[ActionDepletionType, int] = defaultdict(lambda: 0)
+        self.__depletion_limits: Dict[ActionDepletionType, int] = defaultdict(lambda: 1)
         self.__depletion_limits[ActionDepletionType.MOVEMENT] = 6
 
     def get_modifier(self, ability: Ability):
@@ -143,6 +143,7 @@ class Creature(GridItem):
         return f"{self._name} ({self.current_hp if Condition.down not in self.__conditions else 'down'})"
 
     def __get_available_melee_attacks(self, grid: Grid) -> Set[MeleeAttack]:
+        creature_location = grid.find(self)
         return {
             MeleeAttack(self, cast(Creature, target)) for target in grid.get_adjacent_items(creature_location)
             if issubclass(type(target), Creature)
@@ -267,3 +268,6 @@ class Movement(Action):
 
     def describe(self) -> List[str]:
         return [f"{self.__creature} moved {self.__direction.name.lower()}"]
+
+    def __repr__(self) -> str:
+        return f"Move {self.__direction.name.lower()}"

@@ -17,15 +17,18 @@ def main() -> None:
     encounter.add_npc(enemy2, Location(2, 0))
     encounter.initialize()
     for turn in encounter.turns():
-        print(encounter)
-        available_moves = turn.get_all_available_moves()
-        print(f"available moves for {turn.player}: ")
-        print(available_moves)
-        choice = input("Choose move: ")
-        for move in available_moves:
-            if repr(move) == choice:
-                move.execute()
-                print(move.describe())
+        choice = None
+        while choice != "end":
+            print(encounter)
+            available_moves = list(turn.get_all_available_moves())
+            print(f"available moves for {turn.player}: ")
+            for n, move in enumerate(available_moves):
+                print(f"{n}) {move}")
+
+            choice = int(input("Choose move by number (or `end`): "))
+            chosen_action = available_moves[choice]
+            chosen_action.execute()
+            print(chosen_action.describe())
 
 
 if __name__ == "__main__":
