@@ -1,22 +1,12 @@
 from __future__ import annotations
+
+from collections import defaultdict
 from dataclasses import dataclass
-from grid import GridItem, Grid
+from grid import GridItem, Grid, MovementDirection, ItemNotFoundException, LocationOutOfBoundsException
 from dice import DieType, RollResult, ConstantRollResult, DieRollBonus, DieRollMultiplier, StressDieRollResult
 from weapons import Weapon, DamageType
-from typing import Set, List, cast
+from typing import Set, List, cast, Dict
 from enum import Enum
-
-
-class MovementExceededSpeedException(Exception):
-    pass
-
-
-@dataclass
-class CreatureTurnStats:
-    distance_moved: int = 0
-    actions_used: int = 0
-    bonus_actions_used: int = 0
-    reactions_used: int = 0
 
 
 @dataclass(eq=True, frozen=True)
@@ -69,7 +59,9 @@ class Creature(GridItem):
         self._damage_taken: int = 0
         self.__main_weapon: Weapon | None = None
         self.__conditions: Set[Condition] = set()
-        self.__turn_stats = CreatureTurnStats()
+        self.__depletions: Dict[ActionDepletionType, int] = defaultdict(default_factory=lambda: 0)
+        self.__depletion_limits: Dict[ActionDepletionType, int] = defaultdict(default_factory=lambda: 1)
+        self.__depletion_limits[ActionDepletionType.MOVEMENT] = 6
 
     def get_modifier(self, ability: Ability):
         return (self._ability_scores.__dict__.get(ability.value) - 10) // 2
@@ -89,15 +81,25 @@ class Creature(GridItem):
 
     @property
     def speed(self) -> int:
-        return 6
+        return self.__depletion_limits[ActionDepletionType.MOVEMENT]
 
     def start_turn(self) -> None:
-        self.__turn_stats = CreatureTurnStats()
+        depletion_types_to_reset = [
+            ActionDepletionType.ACTION,
+            ActionDepletionType.BONUS,
+            ActionDepletionType.MOVEMENT,
+            ActionDepletionType.REACTION
+        ]
+        for dep_type in depletion_types_to_reset:
+            self.__depletions[dep_type] = 0
 
-    def register_movement(self, distance: int) -> None:
-        if self.__turn_stats.distance_moved + distance > self.speed:
-            raise MovementExceededSpeedException()
-        self.__turn_stats.distance_moved += distance
+    def __is_action_type_depleted(self, action_depletion_type: ActionDepletionType) -> bool:
+        return self.__depletions[action_depletion_type] >= self.__depletion_limits[action_depletion_type]
+
+    def deplete_action_type(self, action_depletion_type: ActionDepletionType) -> None:
+        if self.__is_action_type_depleted(action_depletion_type):
+            raise ActionTypeDepletedException()
+        self.__depletions[action_depletion_type] += 1
 
     def damage(self, amount: int, dmg_type: DamageType) -> None:
         self._damage_taken += amount
@@ -140,30 +142,62 @@ class Creature(GridItem):
     def __repr__(self):
         return f"{self._name} ({self.current_hp if Condition.down not in self.__conditions else 'down'})"
 
-    def get_available_actions(self, grid: Grid) -> Set[Action]:
-        if Condition.down in self.__conditions:
-            return set()
+    def __get_available_melee_attacks(self, grid: Grid) -> Set[MeleeAttack]:
         return {
-            MeleeAttack(self, cast(Creature, target)) for target in grid.get_adjacent_items(grid.find(self))
+            MeleeAttack(self, cast(Creature, target)) for target in grid.get_adjacent_items(creature_location)
             if issubclass(type(target), Creature)
         }
 
-    def get_available_bonus_actions(self, grid: Grid) -> Set[Action]:
-        return set()
+    def __get_available_movement(self, grid: Grid) -> Set[Movement]:
+        creature_location = grid.find(self)
+        return {
+            Movement(self, grid, direction) for direction in MovementDirection.all()
+            if grid.location_vacant(direction.from_location(creature_location))
+        }
 
-    def get_available_reactions(self, grid: Grid) -> Set[Action]:
-        return set()
+    def get_available_actions(self, grid: Grid) -> Set[Action]:
+        if Condition.down in self.__conditions:
+            return set()
+
+        melee_attacks = self.__get_available_melee_attacks(grid)
+        movement = self.__get_available_movement(grid)
+
+        all_actions = melee_attacks | movement
+
+        return {
+            action for action in all_actions
+            if not self.__is_action_type_depleted(action.depletion_type)
+        }
+
+
+class ActionDepletionType(Enum):
+    ACTION = "action"
+    BONUS = "bonus action"
+    REACTION = "reaction"
+    MOVEMENT = "movement"
 
 
 class Action:
-    def __init__(self):
+    def __init__(self, executing_creature: Creature):
         self.__dice_rolled = list()
+        self.__executing_creature = executing_creature
+        self._depletion_type: ActionDepletionType = ActionDepletionType.ACTION
+
+    @property
+    def depletion_type(self) -> ActionDepletionType:
+        return self._depletion_type
 
     def _store_roll(self, roll: RollResult):
         self.__dice_rolled.append(roll)
 
     def execute(self) -> None:
-        pass
+        self._deplete()
+
+    def set_depletion_type(self, depletion_type: ActionDepletionType) -> None:
+        self._depletion_type = depletion_type
+
+    def _deplete(self) -> None:
+        self.__executing_creature.deplete_action_type(self._depletion_type)
 
     def describe(self) -> List[str]:
         rolls_descriptions: List[str] = list()
@@ -181,13 +215,14 @@ class Action:
 
 class MeleeAttack(Action):
     def __init__(self, attacker: Creature, target: Creature):
-        super().__init__()
+        super().__init__(attacker)
         self.__attacker: Creature = attacker
         self.__target: Creature = target
         self.__hit_roll: RollResult | None = None
         self.__damage_roll: RollResult | None = None
 
     def execute(self) -> None:
+        self._deplete()
         self.__hit_roll: StressDieRollResult = self.__attacker.roll_melee_hit()
         self.__hit_roll.set_dc(self.__target.armor_class)
         self.__hit_roll.tag = "hit"
@@ -204,3 +239,31 @@ class MeleeAttack(Action):
     def __repr__(self):
         return f"Melee on {self.__target}"
 
+
+class InvalidActionException(Exception):
+    pass
+
+
+class ActionTypeDepletedException(Exception):
+    pass
+
+
+class Movement(Action):
+    def __init__(self, creature: Creature, grid: Grid, direction: MovementDirection) -> None:
+        super().__init__(creature)
+        self.__creature = creature
+        self.__grid = grid
+        self.__direction = direction
+        self.set_depletion_type(ActionDepletionType.MOVEMENT)
+
+    def execute(self) -> None:
+        try:
+            current_location = self.__grid.find(self.__creature)
+            target_location = self.__direction.from_location(current_location)
+            self._deplete()
+            self.__grid.move(current_location, target_location)
+        except (LocationOutOfBoundsException, ActionTypeDepletedException):
+            raise InvalidActionException()
+
+    def describe(self) -> List[str]:
+        return [f"{self.__creature} moved {self.__direction.name.lower()}"]
