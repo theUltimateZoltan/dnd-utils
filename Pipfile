@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 pyyaml = "*"
 tabulate = "*"
-types-tabulate = "*"
 
 [dev-packages]
 pytest = "*"
