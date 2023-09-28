@@ -21,14 +21,18 @@ def main() -> None:
         while choice != "end":
             print(encounter)
             available_moves = list(turn.get_all_available_moves())
-            print(f"available moves for {turn.player}: ")
-            for n, move in enumerate(available_moves):
-                print(f"{n}) {move}")
+            if available_moves:
+                print(f"Available moves for {turn.player}: ")
+                for n, move in enumerate(available_moves):
+                    print(f"{n}) {move}")
+            else:
+                print("No available moves. Type 'end' to end turn.")
 
-            choice = int(input("Choose move by number (or `end`): "))
-            chosen_action = available_moves[choice]
-            chosen_action.execute()
-            print(chosen_action.describe())
+            choice = input("Choose move by number (or `end`): ")
+            if choice != "end":
+                chosen_action = available_moves[int(choice)]
+                chosen_action.execute()
+                print(chosen_action.describe())
 
 
 if __name__ == "__main__":

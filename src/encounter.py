@@ -8,6 +8,7 @@ from queue import Queue
 class Turn:
     def __init__(self, encounter: Encounter):
         self.__encounter = encounter
+        self.__encounter.active_creature.start_turn()
 
     @property
     def player(self):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from grid import GridItem, Grid, MovementDirection, ItemNotFoundException, LocationOutOfBoundsException
+from grid import GridItem, Grid, MovementDirection, LocationOutOfBoundsException
 from dice import DieType, RollResult, ConstantRollResult, DieRollBonus, DieRollMultiplier, StressDieRollResult
 from weapons import Weapon, DamageType
 from typing import Set, List, cast, Dict

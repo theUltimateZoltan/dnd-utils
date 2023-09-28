@@ -47,11 +47,11 @@ class Grid:
 
     @property
     def width(self):
-        return len(self.__cells)-1
+        return len(self.__cells)
 
     @property
     def height(self):
-        return len(self.__cells[0])-1
+        return len(self.__cells[0])
 
     def place(self, map_item: GridItem, loc: Location):
         self.__items_index[map_item.uuid] = loc
