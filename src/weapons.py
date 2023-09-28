@@ -23,20 +23,20 @@ class DamageType(Enum):
 
 
 @dataclass
-class RollAffects:
+class AttributedDamageTypes:
     immunities: List[DamageType]
     resistances: List[DamageType]
     vulnerabilities: List[DamageType]
 
 
-class CompoundRollResult:
+class CompoundDamageRollResult:
     def __init__(self) -> None:
         self._rolls: Dict[DamageType, List[RollResult]] = defaultdict(lambda _: [])
 
     def add_roll(self, damage_type: DamageType, roll: RollResult) -> None:
         self._rolls[damage_type].append(roll)
 
-    def calculate_roll(self, roll_affects: RollAffects) -> int | float:
+    def calculate_roll(self, roll_affects: AttributedDamageTypes) -> int | float:
         uncalculated_rolls = self._rolls.copy()
         total_damage: int | float = 0
         for immunity in roll_affects.immunities:
@@ -55,7 +55,7 @@ class CompoundRollResult:
 
 
 class Weapon:
-    def __init__(self, name: str, damage_dice: List[Die], damage_type: DamageType):
+    def __init__(self, name: str, damage_type: DamageType, damage_dice: List[Die]):
         self.__name: str = name
         self.__damage_die: List[Die] = damage_dice
         self._base_damage_type: DamageType = damage_type
@@ -63,8 +63,8 @@ class Weapon:
             lambda _: []
         )
 
-    def roll_damage(self) -> CompoundRollResult:
-        total_damage = CompoundRollResult()
+    def roll_damage(self) -> CompoundDamageRollResult:
+        total_damage = CompoundDamageRollResult()
         for result_type, dice in self._bonus_damages:
             total_damage.add_roll(result_type, dice)
         return total_damage
