@@ -9,7 +9,7 @@ from dice import (
     DieRollMultiplier,
     StressDieRollResult,
 )
-from weapons import Weapon, DamageType
+from weapons import Weapon, DamageType, CompoundDamageRollResult, AttributedDamageTypes
 from typing import Set, List, cast
 from enum import Enum
 
@@ -67,7 +67,7 @@ class Creature(GridItem):
         def build(self) -> Creature:
             return self.__creature
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._ability_scores: AbilityScores = AbilityScores(10, 10, 10, 10, 10, 10)
         self._name: str = "Creature"
@@ -77,6 +77,7 @@ class Creature(GridItem):
         self.__main_weapon: Weapon | None = None
         self.__conditions: Set[Condition] = set()
         self.__turn_stats = CreatureTurnStats()
+        self.__attributed_damage_types = AttributedDamageTypes([],[],[])
 
     def get_modifier(self, ability: Ability):
         return (self._ability_scores.__dict__.get(ability.value) - 10) // 2
@@ -107,8 +108,8 @@ class Creature(GridItem):
             raise MovementExceededSpeedException()
         self.__turn_stats.distance_moved += distance
 
-    def damage(self, amount: int, dmg_type: DamageType) -> None:
-        self._damage_taken += amount
+    def damage(self, damage_roll: CompoundDamageRollResult) -> None:
+        self._damage_taken += damage_roll.result(self.__attributed_damage_types)
         if self.current_hp <= 0:
             self.gain_condition(Condition.down)
 
@@ -129,7 +130,7 @@ class Creature(GridItem):
         )
         return initiative_roll
 
-    def roll_melee_damage(self) -> RollResult:
+    def roll_melee_damage(self) -> CompoundDamageRollResult:
         if self.__main_weapon:
             base_damage_roll = self.__main_weapon.roll_damage()
             base_damage_roll.add_bonus(
