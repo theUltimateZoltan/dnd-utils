@@ -35,6 +35,10 @@ class Turn:
         raise NotImplementedError()
 
 
+class NoCreatureDefinedForEncounter(Exception):
+    ...
+
+
 class Encounter:
     def __init__(self) -> None:
         self.__grid: Grid = Grid(3, 3)
@@ -44,9 +48,13 @@ class Encounter:
         self.__initiative_queue: Queue[Creature] = Queue()
 
     @property
+    def has_creature(self) -> bool:
+        return self.__active is not None
+
+    @property
     def active_creature(self) -> Creature:
-        if self.__active is None:
-            raise RuntimeError("No active creature added to encounter!")
+        if self.has_creature is None:
+            raise NoCreatureDefinedForEncounter("No active creature added to encounter!")
         return self.__active
 
     @property
