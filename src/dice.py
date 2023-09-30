@@ -42,7 +42,7 @@ class DieRollMultiplier:
 
 
 class RollResult:
-    def __init__(self, die: Die):
+    def __init__(self, die: Die) -> None:
         self._die_rolled: Die = die
         self._natural_roll: List[int] = die.roll()
         self.__bonuses: Set[DieRollBonus] = set()
@@ -55,7 +55,7 @@ class RollResult:
     def add_multiplier(self, multiplier: DieRollMultiplier) -> None:
         self.__multipliers.add(multiplier)
 
-    def __get_final_multiplier(self):
+    def __get_final_multiplier(self) -> int | float:
         if len(self.__multipliers) > 0:
             return reduce(operator.mul, {mul.multiplier for mul in self.__multipliers})
         else:
@@ -72,11 +72,13 @@ class RollResult:
     def bonuses(self) -> Set[DieRollBonus]:
         return self.__bonuses
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         bonus_sum = sum(bonus.amount for bonus in self.__bonuses)
         final_multiplier = self.__get_final_multiplier()
         basic_repr = (
-            f"{self._die_rolled}+{bonus_sum}" if bonus_sum != 0 else self._die_rolled
+            f"{self._die_rolled}+{bonus_sum}"
+            if bonus_sum != 0
+            else str(self._die_rolled)
         )
         return (
             basic_repr
@@ -89,7 +91,7 @@ class StressDieRollResult(RollResult):
     CRIT_SUCCESS_VALUE: int = 20
     CRIT_FAILURE_VALUE: int = 1
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(Die(1, DieType.d20))
         self.__difficulty_class: int | None = None
         self.__advantages: Set[AdvantageSource] = set()
@@ -143,7 +145,7 @@ class StressDieRollResult(RollResult):
         )
 
     @property
-    def result(self):
+    def result(self) -> int | float:
         if self.is_critical_success:
             return NAT20
         elif self.is_critical_failure:
@@ -159,7 +161,7 @@ class ConstantRollResult(RollResult):
 
 
 class Die:
-    def __init__(self, amount: int, die_type: DieType):
+    def __init__(self, amount: int, die_type: DieType) -> None:
         self.__amount = amount
         self.__type = die_type
 
@@ -167,8 +169,8 @@ class Die:
         return [randint(1, self.__type.value) for _ in range(self.__amount)]
 
     @property
-    def type(self):
+    def type(self) -> DieType:
         return self.__type
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__amount}{self.__type.name}"

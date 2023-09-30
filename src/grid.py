@@ -16,40 +16,42 @@ class ItemNotFoundException(Exception):
 
 
 class Grid:
-    def __init__(self, size_x: int, size_y: int):
+    def __init__(self, size_x: int, size_y: int) -> None:
         self.__cells: List[List[GridItem | None]] = [
             [None for _ in range(size_y)] for _ in range(size_x)
         ]
         self.__items_index: Dict[UUID, Location] = dict()
 
     @property
-    def width(self):
+    def width(self) -> int:
         return len(self.__cells) - 1
 
     @property
-    def height(self):
+    def height(self) -> int:
         return len(self.__cells[0]) - 1
 
-    def place(self, map_item: GridItem, loc: Location):
+    def place(self, map_item: GridItem, loc: Location) -> None:
         self.__items_index[map_item.uuid] = loc
         self.__cells[loc.y][loc.x] = map_item
 
     def clear(self, loc: Location) -> GridItem | None:
         content = self.__cells[loc.y][loc.x]
+        if content is None:
+            return None
         self.__items_index.pop(content.uuid)
         self.__cells[loc.y][loc.x] = None
         return content
 
-    def location_in_bounds(self, loc: Location):
+    def location_in_bounds(self, loc: Location) -> bool:
         return 0 <= loc.x <= self.width and 0 <= loc.y <= self.height
 
-    def move(self, source: Location, dest: Location):
-        item = self.clear(source)
-        self.place(item, dest)
+    def move(self, source: Location, dest: Location) -> None:
+        if item := self.clear(source):
+            self.place(item, dest)
 
-    def find(self, item) -> Location:
+    def find(self, item: GridItem) -> Location:
         try:
-            return self.__items_index.get(item.uuid)
+            return self.__items_index[item.uuid]
         except IndexError:
             raise ItemNotFoundException("Item not in grid")
 
@@ -59,63 +61,27 @@ class Grid:
             for y in range(loc.y - 1, loc.y + 2):
                 adj = Location(x, y)
                 if self.location_in_bounds(adj) and adj != loc:
-                    all_adjacent_indices.add(adj)
+                    if grid_item := self.__cells[x][y]:
+                        all_adjacent_indices.add(grid_item)
+        return all_adjacent_indices
 
-        if loc.x == 0:
-            indices_left = {
-                Location(loc.x - 1, loc.y),
-                Location(loc.x - 1, loc.y + 1),
-                Location(loc.x - 1, loc.y - 1),
-            }
-            all_adjacent_indices = all_adjacent_indices - indices_left
-
-        if loc.x == len(self.__cells) - 1:
-            indices_right = {
-                Location(loc.x + 1, loc.y),
-                Location(loc.x + 1, loc.y + 1),
-                Location(loc.x + 1, loc.y - 1),
-            }
-            all_adjacent_indices = all_adjacent_indices - indices_right
-
-        if loc.y == 0:
-            indices_above = {
-                Location(loc.x - 1, loc.y - 1),
-                Location(loc.x + 1, loc.y - 1),
-                Location(loc.x, loc.y - 1),
-            }
-            all_adjacent_indices = all_adjacent_indices - indices_above
-
-        if loc.y == len(self.__cells[0]) - 1:
-            indices_below = {
-                Location(loc.x - 1, loc.y + 1),
-                Location(loc.x + 1, loc.y + 1),
-                Location(loc.x, loc.y + 1),
-            }
-            all_adjacent_indices = all_adjacent_indices - indices_below
-
-        return {
-            self.__cells[adjacent_loc.y][adjacent_loc.x]
-            for adjacent_loc in all_adjacent_indices
-            if self.__cells[adjacent_loc.y][adjacent_loc.x] is not None
-        }
-
-    def __repr__(self):
+    def __repr__(self) -> str:
         return tabulate(self.__cells, tablefmt="grid")
 
 
 class GridItem:
-    def __init__(self):
+    def __init__(self) -> None:
         self.__uuid = uuid4()
 
     @property
-    def uuid(self):
+    def uuid(self) -> UUID:
         return self.__uuid
 
 
 class WrittenGridItem(GridItem):
-    def __init__(self, text: str):
+    def __init__(self, text: str) -> None:
         super().__init__()
         self.__text = text
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__text
