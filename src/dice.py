@@ -62,7 +62,7 @@ class RollResult:
             return 1
 
     @property
-    def result(self) -> int:
+    def result(self) -> int | float:
         unmultiplied_result = sum(self._natural_roll) + sum(
             bonus.amount for bonus in self.__bonuses
         )
