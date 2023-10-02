@@ -66,7 +66,7 @@ class RollResult:
         unmultiplied_result = sum(self._natural_roll) + sum(
             bonus.amount for bonus in self.__bonuses
         )
-        return self.__get_final_multiplier() * unmultiplied_result
+        return int(self.__get_final_multiplier() * unmultiplied_result)
 
     @property
     def bonuses(self) -> Set[DieRollBonus]:

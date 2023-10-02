@@ -4,12 +4,11 @@ from grid import GridItem, Grid
 from dice import (
     DieType,
     RollResult,
-    ConstantRollResult,
     DieRollBonus,
     DieRollMultiplier,
     StressDieRollResult,
 )
-from weapons import Weapon, DamageType
+from weapons import Weapon, CompoundDamageRollResult, AttributedDamageTypes, DamageType
 from typing import Set, List, cast
 from enum import Enum
 
@@ -80,6 +79,7 @@ class Creature(GridItem):
         self.__main_weapon: Weapon | None = None
         self.__conditions: Set[Condition] = set()
         self.__turn_stats = CreatureTurnStats()
+        self.__attributed_damage_types = AttributedDamageTypes([], [], [])
 
     def get_modifier(self, ability: Ability) -> int | float:
         return (self._ability_scores.get(ability) - 10) // 2
@@ -110,8 +110,8 @@ class Creature(GridItem):
             raise MovementExceededSpeedException()
         self.__turn_stats.distance_moved += distance
 
-    def damage(self, amount: int, dmg_type: DamageType) -> None:
-        self._damage_taken += amount
+    def damage(self, damage_roll: CompoundDamageRollResult) -> None:
+        self._damage_taken += damage_roll.result(self.__attributed_damage_types)
         if self.current_hp <= 0:
             self.gain_condition(Condition.down)
 
@@ -132,18 +132,21 @@ class Creature(GridItem):
         )
         return initiative_roll
 
-    def roll_melee_damage(self) -> RollResult:
+    def roll_melee_damage(self) -> CompoundDamageRollResult:
         if self.__main_weapon:
             base_damage_roll = self.__main_weapon.roll_damage()
             base_damage_roll.add_bonus(
-                DieRollBonus(Ability.STR.value, int(self.get_modifier(Ability.STR)))
+                self.__main_weapon.main_damage_type,
+                DieRollBonus(Ability.STR.value, int(self.get_modifier(Ability.STR))),
             )
             base_damage_roll.add_bonus(
-                DieRollBonus("proficiency", self.proficiency_bonus)
+                self.__main_weapon.main_damage_type,
+                DieRollBonus("proficiency", self.proficiency_bonus),
             )
             return base_damage_roll
         else:
-            return ConstantRollResult(1)
+            # Return a dummy CompoundDamageRollResult which will have a hit value of 1
+            return CompoundDamageRollResult()
 
     def roll_melee_hit(self) -> StressDieRollResult:
         hit_roll = StressDieRollResult()
@@ -177,9 +180,9 @@ class Creature(GridItem):
 
 class Action:
     def __init__(self) -> None:
-        self.__dice_rolled: List[RollResult] = list()
+        self.__dice_rolled: List[RollResult | CompoundDamageRollResult] = list()
 
-    def _store_roll(self, roll: RollResult) -> None:
+    def _store_roll(self, roll: RollResult | CompoundDamageRollResult) -> None:
         self.__dice_rolled.append(roll)
 
     def execute(self) -> None:
@@ -189,7 +192,7 @@ class Action:
         rolls_descriptions: List[str] = list()
         for roll in self.__dice_rolled:
             roll_result = f"{roll.tag}: rolled {roll} for {roll.result}."
-            if type(roll) == StressDieRollResult:
+            if isinstance(roll, StressDieRollResult):
                 success_description = (
                     "Critical "
                     if (roll.is_critical_success or roll.is_critical_failure)
@@ -209,7 +212,7 @@ class MeleeAttack(Action):
         self.__attacker: Creature = attacker
         self.__target: Creature = target
         self.__hit_roll: RollResult | None = None
-        self.__damage_roll: RollResult | None = None
+        self.__damage_roll: CompoundDamageRollResult | None = None
 
     def execute(self) -> None:
         self.__hit_roll = self.__attacker.roll_melee_hit()
@@ -221,9 +224,14 @@ class MeleeAttack(Action):
             self.__damage_roll = self.__attacker.roll_melee_damage()
             self.__damage_roll.tag = "damage"
             if self.__hit_roll.is_critical_success:
-                self.__damage_roll.add_multiplier(DieRollMultiplier("critical hit", 2))
+                self.__damage_roll.add_multiplier(
+                    self.__damage_roll.weapon.main_damage_type
+                    if self.__damage_roll.weapon
+                    else DamageType.bludgeoning,
+                    DieRollMultiplier("critical hit", 2),
+                )
             self._store_roll(self.__damage_roll)
-            self.__target.damage(int(self.__damage_roll.result), DamageType.bludgeoning)
+            self.__target.damage(self.__damage_roll)
 
     def __repr__(self) -> str:
         return f"Melee on {self.__target}"

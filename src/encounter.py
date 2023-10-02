@@ -54,8 +54,10 @@ class Encounter:
     @property
     def active_creature(self) -> Creature:
         if self.has_creature is None:
-            raise NoCreatureDefinedForEncounter("No active creature added to encounter!")
-        return self.__active
+            raise NoCreatureDefinedForEncounter(
+                "No active creature added to encounter!"
+            )
+        return self.__active  # type: ignore
 
     @property
     def grid(self) -> Grid:
