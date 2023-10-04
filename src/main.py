@@ -3,13 +3,13 @@ from dice import Die, DieType
 from grid import Location
 from encounter import Encounter
 from creatures import Creature
-from weapons import Weapon
+from weapons import Weapon, DamageType
 
 
 def main() -> None:
     encounter: Encounter = Encounter()
     player = Creature.Builder().name("Player").level(3).build()
-    player.equip_weapon(Weapon("Sword", Die(1, DieType.d8)))
+    player.equip_weapon(Weapon("Sword", DamageType.slashing, [Die(1, DieType.d8)]))
     enemy = Creature.Builder().name("Enemy1").level(3).build()
     enemy2 = Creature.Builder().name("Enemy2").level(2).build()
     encounter.add_player(player, Location(1, 1))
@@ -26,7 +26,7 @@ def main() -> None:
                 for n, move in enumerate(available_moves):
                     print(f"{n}) {move}")
             else:
-                print("No available moves. Type 'end' to end turn.")
+                print(f"{turn.player}: No available moves. Type 'end' to end turn.")
 
             choice = input("Choose move by number (or `end`): ")
             if choice != "end":
