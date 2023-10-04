@@ -74,6 +74,7 @@ class Grid:
         return 0 <= loc.x <= self.width and 0 <= loc.y <= self.height
 
     def location_vacant(self, loc: Location) -> bool:
+        # Note: Location vacancy may be altered by context (spells, creature size, conditions, properties, etc.)
         return self.location_in_bounds(loc) and self.__cells[loc.y][loc.x] is None
 
     def move(self, source: Location, dest: Location) -> None:
