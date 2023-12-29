@@ -159,6 +159,9 @@ class ConstantRollResult(RollResult):
         super().__init__(Die(0, DieType.dummy))
         self._natural_roll = [value]
 
+    def __repr__(self) -> str:
+        return f"constant {self._natural_roll[0]}"
+
 
 class Die:
     def __init__(self, amount: int, die_type: DieType) -> None:

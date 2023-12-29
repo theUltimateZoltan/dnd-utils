@@ -1,5 +1,18 @@
 from __future__ import annotations
+
+from collections import defaultdict
 from dataclasses import dataclass
+from grid import GridItem, Grid, MovementDirection, LocationOutOfBoundsException
+from dice import (
+    DieType,
+    RollResult,
+    ConstantRollResult,
+    DieRollBonus,
+    DieRollMultiplier,
+    StressDieRollResult,
+)
+from weapons import Weapon, DamageType
+from typing import Set, List, cast, Dict
 from grid import GridItem, Grid
 from dice import (
     DieType,
@@ -11,18 +24,6 @@ from dice import (
 from weapons import Weapon, CompoundDamageRollResult, AttributedDamageTypes, DamageType
 from typing import Set, List, cast
 from enum import Enum
-
-
-class MovementExceededSpeedException(Exception):
-    pass
-
-
-@dataclass
-class CreatureTurnStats:
-    distance_moved: int = 0
-    actions_used: int = 0
-    bonus_actions_used: int = 0
-    reactions_used: int = 0
 
 
 @dataclass(eq=True, frozen=True)
@@ -72,14 +73,16 @@ class Creature(GridItem):
     def __init__(self) -> None:
         super().__init__()
         self._ability_scores: AbilityScores = AbilityScores(10, 10, 10, 10, 10, 10)
+        self.__attributed_damage_types = AttributedDamageTypes([], [], [])
         self._name: str = "Creature"
         self._level: int = 1
         self._hit_die_type: DieType = DieType.d8
         self._damage_taken: int = 0
         self.__main_weapon: Weapon | None = None
         self.__conditions: Set[Condition] = set()
-        self.__turn_stats = CreatureTurnStats()
-        self.__attributed_damage_types = AttributedDamageTypes([], [], [])
+        self.__depletions: Dict[ActionDepletionType, int] = defaultdict(lambda: 0)
+        self.__depletion_limits: Dict[ActionDepletionType, int] = defaultdict(lambda: 1)
+        self.__depletion_limits[ActionDepletionType.MOVEMENT] = 6
 
     def get_modifier(self, ability: Ability) -> int | float:
         return (self._ability_scores.get(ability) - 10) // 2
@@ -100,15 +103,30 @@ class Creature(GridItem):
 
     @property
     def speed(self) -> int:
-        return 6
+        return self.__depletion_limits[ActionDepletionType.MOVEMENT]
 
     def start_turn(self) -> None:
-        self.__turn_stats = CreatureTurnStats()
+        depletion_types_to_reset = [
+            ActionDepletionType.ACTION,
+            ActionDepletionType.BONUS,
+            ActionDepletionType.MOVEMENT,
+            ActionDepletionType.REACTION,
+        ]
+        for dep_type in depletion_types_to_reset:
+            self.__depletions[dep_type] = 0
 
-    def register_movement(self, distance: int) -> None:
-        if self.__turn_stats.distance_moved + distance > self.speed:
-            raise MovementExceededSpeedException()
-        self.__turn_stats.distance_moved += distance
+    def __is_action_type_depleted(
+        self, action_depletion_type: ActionDepletionType
+    ) -> bool:
+        return (
+            self.__depletions[action_depletion_type]
+            >= self.__depletion_limits[action_depletion_type]
+        )
+
+    def deplete_action_type(self, action_depletion_type: ActionDepletionType) -> None:
+        if self.__is_action_type_depleted(action_depletion_type):
+            raise ActionTypeDepletedException()
+        self.__depletions[action_depletion_type] += 1
 
     def damage(self, damage_roll: CompoundDamageRollResult) -> None:
         self._damage_taken += damage_roll.result(self.__attributed_damage_types)
@@ -132,6 +150,11 @@ class Creature(GridItem):
         )
         return initiative_roll
 
+    def __empty_handed_attack_damage(self) -> CompoundDamageRollResult:
+        damage = CompoundDamageRollResult()
+        damage.add_roll(DamageType.bludgeoning, ConstantRollResult(1))
+        return damage
+
     def roll_melee_damage(self) -> CompoundDamageRollResult:
         if self.__main_weapon:
             base_damage_roll = self.__main_weapon.roll_damage()
@@ -145,8 +168,7 @@ class Creature(GridItem):
             )
             return base_damage_roll
         else:
-            # Return a dummy CompoundDamageRollResult which will have a hit value of 1
-            return CompoundDamageRollResult()
+            return self.__empty_handed_attack_damage()
 
     def roll_melee_hit(self) -> StressDieRollResult:
         hit_roll = StressDieRollResult()
@@ -162,36 +184,69 @@ class Creature(GridItem):
     def __repr__(self) -> str:
         return f"{self._name} ({self.current_hp if Condition.down not in self.__conditions else 'down'})"
 
-    def get_available_actions(self, grid: Grid) -> Set[Action]:
-        if Condition.down in self.__conditions:
-            return set()
+    def __get_available_melee_attacks(self, grid: Grid) -> Set[MeleeAttack]:
+        creature_location = grid.find(self)
         return {
             MeleeAttack(self, cast(Creature, target))
-            for target in grid.get_adjacent_items(grid.find(self))
+            for target in grid.get_adjacent_items(creature_location)
             if issubclass(type(target), Creature)
         }
 
-    def get_available_bonus_actions(self, grid: Grid) -> Set[Action]:
-        return set()
+    def __get_available_movement(self, grid: Grid) -> Set[Movement]:
+        creature_location = grid.find(self)
+        return {
+            Movement(self, grid, direction)
+            for direction in MovementDirection.all()
+            if grid.location_vacant(creature_location + direction)
+        }
 
-    def get_available_reactions(self, grid: Grid) -> Set[Action]:
-        return set()
+    def get_available_actions(self, grid: Grid) -> Set[Action]:
+        if Condition.down in self.__conditions:
+            return set()
+
+        melee_attacks = self.__get_available_melee_attacks(grid)
+        movement = self.__get_available_movement(grid)
+
+        all_actions = melee_attacks | movement
+
+        return {
+            action
+            for action in all_actions
+            if not self.__is_action_type_depleted(action.depletion_type)
+        }
+
+
+class ActionDepletionType(Enum):
+    ACTION = "action"
+    BONUS = "bonus action"
+    REACTION = "reaction"
+    MOVEMENT = "movement"
 
 
 class Action:
-    def __init__(self) -> None:
+    def __init__(self, executing_creature: Creature):
         self.__dice_rolled: List[RollResult | CompoundDamageRollResult] = list()
+        self.__executing_creature = executing_creature
+        self._depletion_type: ActionDepletionType = ActionDepletionType.ACTION
+
+    @property
+    def depletion_type(self) -> ActionDepletionType:
+        return self._depletion_type
 
     def _store_roll(self, roll: RollResult | CompoundDamageRollResult) -> None:
         self.__dice_rolled.append(roll)
 
     def execute(self) -> None:
-        pass
+        self._deplete()
+
+    def set_depletion_type(self, depletion_type: ActionDepletionType) -> None:
+        self._depletion_type = depletion_type
+
+    def _deplete(self) -> None:
+        self.__executing_creature.deplete_action_type(self._depletion_type)
 
     def describe(self) -> List[str]:
-        rolls_descriptions: List[str] = list()
-        for roll in self.__dice_rolled:
-            roll_result = f"{roll.tag}: rolled {roll} for {roll.result}."
+        def get_roll_description(roll: RollResult | CompoundDamageRollResult) -> str:
             if isinstance(roll, StressDieRollResult):
                 success_description = (
                     "Critical "
@@ -199,23 +254,29 @@ class Action:
                     else ""
                 )
                 success_description += "Success!" if roll.is_success else "Failure..."
-                rolls_descriptions.append(f"{roll_result} {success_description}")
+                return f"{roll.tag}: rolled {roll} for {roll.result}. {success_description}"
+            elif isinstance(roll, CompoundDamageRollResult):
+                return f"{roll.tag}: {roll}"
             else:
-                rolls_descriptions.append(roll_result)
+                return f"{roll.tag}: rolled {roll} for {roll.result}."
+
+        rolls_descriptions: List[str] = list()
+        for roll in self.__dice_rolled:
+            rolls_descriptions.append(get_roll_description(roll))
 
         return rolls_descriptions
 
 
 class MeleeAttack(Action):
     def __init__(self, attacker: Creature, target: Creature) -> None:
-        super().__init__()
+        super().__init__(attacker)
         self.__attacker: Creature = attacker
+        self.__hit_roll: StressDieRollResult = self.__attacker.roll_melee_hit()
         self.__target: Creature = target
-        self.__hit_roll: RollResult | None = None
         self.__damage_roll: CompoundDamageRollResult | None = None
 
     def execute(self) -> None:
-        self.__hit_roll = self.__attacker.roll_melee_hit()
+        self._deplete()
         self.__hit_roll.set_dc(self.__target.armor_class)
         self.__hit_roll.tag = "hit"
         self._store_roll(self.__hit_roll)
@@ -235,3 +296,37 @@ class MeleeAttack(Action):
 
     def __repr__(self) -> str:
         return f"Melee on {self.__target}"
+
+
+class InvalidActionException(Exception):
+    pass
+
+
+class ActionTypeDepletedException(Exception):
+    pass
+
+
+class Movement(Action):
+    def __init__(
+        self, creature: Creature, grid: Grid, direction: MovementDirection
+    ) -> None:
+        super().__init__(creature)
+        self.__creature = creature
+        self.__grid = grid
+        self.__direction = direction
+        self.set_depletion_type(ActionDepletionType.MOVEMENT)
+
+    def execute(self) -> None:
+        try:
+            current_location = self.__grid.find(self.__creature)
+            target_location = current_location + self.__direction
+            self._deplete()
+            self.__grid.move(current_location, target_location)
+        except (LocationOutOfBoundsException, ActionTypeDepletedException):
+            raise InvalidActionException()
+
+    def describe(self) -> List[str]:
+        return [f"{self.__creature} moved {self.__direction.name.lower()}"]
+
+    def __repr__(self) -> str:
+        return f"Move {self.__direction.name.lower()}"

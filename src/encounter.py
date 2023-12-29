@@ -8,31 +8,16 @@ from queue import Queue
 class Turn:
     def __init__(self, encounter: Encounter) -> None:
         self.__encounter = encounter
-        self.__available_actions = encounter.active_creature.get_available_actions(
-            encounter.grid
-        )
-        self.__available_bonus_actions = (
-            encounter.active_creature.get_available_bonus_actions(encounter.grid)
-        )
-        self.__available_reactions = encounter.active_creature.get_available_reactions(
-            encounter.grid
-        )
+        self.__encounter.active_creature.start_turn()
 
     @property
     def player(self) -> Creature | None:
         return self.__encounter.active_creature
 
     def get_all_available_moves(self) -> Set[Action]:
-        return self.__available_actions | self.__available_bonus_actions
-
-    def take_action(self, action: Action) -> None:
-        raise NotImplementedError()
-
-    def move(self, loc: Location) -> None:
-        raise NotImplementedError()
-
-    def take_bonus_action(self, action: Action) -> None:
-        raise NotImplementedError()
+        return self.__encounter.active_creature.get_available_actions(
+            self.__encounter.grid
+        )
 
 
 class NoCreatureDefinedForEncounter(Exception):

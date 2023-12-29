@@ -1,6 +1,6 @@
 from copy import copy
 from enum import Enum
-from typing import Dict, DefaultDict
+from typing import DefaultDict
 from dice import Die, RollResult, DieRollMultiplier, DieRollBonus, StressDieRollResult
 from dataclasses import dataclass
 from collections import defaultdict
@@ -92,6 +92,12 @@ class CompoundDamageRollResult:
         if multiplier := roll_affects.get_damage_type_multiplier(damage_type):
             applied_damage_roll.add_multiplier(multiplier)
         return applied_damage_roll
+
+    def __repr__(self) -> str:
+        return ", ".join(
+            f"{sum(roll.result for roll in dmg_rolls)} {dmg_type.value}"
+            for dmg_type, dmg_rolls in self._rolls.items()
+        )
 
 
 class Weapon:
