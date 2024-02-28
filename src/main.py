@@ -1,9 +1,9 @@
 from __future__ import annotations
-from dice import Die, DieType
-from grid import Location
-from encounter import Encounter
-from creatures import Creature
-from weapons import Weapon, DamageType
+from lib.dnd5e.dice import Die, DieType
+from lib.dnd5e.grid import Location
+from lib.dnd5e.encounter import Encounter
+from lib.dnd5e.creatures import Creature
+from lib.dnd5e.weapons import Weapon, DamageType
 
 
 def main() -> None:
