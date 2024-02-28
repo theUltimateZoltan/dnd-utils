@@ -9,3 +9,7 @@ tabulate = "*"
 
 [dev-packages]
 pytest = "*"
+dnd = {editable = true, path = "./../lib"}
+
+[requires]
+python_version = "3.10"
