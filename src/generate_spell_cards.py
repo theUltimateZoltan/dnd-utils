@@ -1,5 +1,5 @@
 from pathlib import Path
-from dnd.spells import SpellBook, Spell
+from dnd.spells import SpellBook
 from tqdm.auto import tqdm
 
 if __name__ == "__main__":
