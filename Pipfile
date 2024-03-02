@@ -7,6 +7,7 @@ name = "pypi"
 pypng = "*"
 pyyaml = "*"
 tabulate = "*"
+tqdm = "*"
 
 [dev-packages]
 pytest = "*"
@@ -14,9 +15,10 @@ ipython = "*"
 mypy = "*"
 dnd = {editable = true, path = "./../lib"}
 ipykernel = "*"
+ipywidgets = "*"
 
 [requires]
 python_version = "3.10"
 
 [scripts]
-install = "/bin/zsh -c 'cd ${WORKSPACE_DIR}/utils && pipenv clean && pipenv install --dev'"
+install = "/bin/zsh -c 'pipenv clean && pipenv install --dev'"
