@@ -4,12 +4,19 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+pypng = "*"
 pyyaml = "*"
 tabulate = "*"
 
 [dev-packages]
 pytest = "*"
+ipython = "*"
+mypy = "*"
 dnd = {editable = true, path = "./../lib"}
+ipykernel = "*"
 
 [requires]
 python_version = "3.10"
+
+[scripts]
+install = "/bin/zsh -c 'cd ${WORKSPACE_DIR}/utils && pipenv clean && pipenv install --dev'"
